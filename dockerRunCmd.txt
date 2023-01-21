@@ -1,1 +1,0 @@
-docker run -it --rm jackpot1p python -c "import os; os.chdir('/src'); import jackpot1p"
