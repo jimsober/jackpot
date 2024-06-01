@@ -1219,7 +1219,7 @@ def high_scores(scope, player, score, num_players, round):
     else:
         user_name = "Player "+str(player+1)
 
-    with open('high_scores.dat') as json_file:
+    with open('high_scores.json') as json_file:
         data = json.load(json_file)
         newData = data.copy()
 
@@ -1244,7 +1244,7 @@ def high_scores(scope, player, score, num_players, round):
                         'user': user_name,
                         'date': dt_string
                     })
-                    with open('high_scores.dat','w') as outfile:
+                    with open('high_scores.json','w') as outfile:
                         json.dump(newData, outfile)
                 elif g['score'] == score and tieScore:
                     print()
@@ -1271,7 +1271,7 @@ def high_scores(scope, player, score, num_players, round):
                         'user': user_name,
                         'date': dt_string
                     })
-                    with open('high_scores.dat','w') as outfile:
+                    with open('high_scores.json','w') as outfile:
                         json.dump(newData, outfile)
                 elif r['score'] == score and tieScore:
                     print()
