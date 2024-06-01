@@ -1,6 +1,6 @@
 # Jackpot
 
-* Single player game versus 1-3 computer opponents (2-4 player games).
+* 2-4 player games, single player versus 1-3 computer opponents.
 * Each game consists of 3 rounds.
 * Option to forfeit game at the end of the first two rounds.
 * Option to play again at the end of the game.
