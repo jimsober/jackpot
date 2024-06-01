@@ -1,22 +1,4 @@
 #!/usr/local/bin/python3
-#
-#  1 player game vs 2-4 computer opponents
-#  each game consists of 3 rounds
-#  option to forfeit game at end of round
-#  option to play again
-#
-#  Dice sides
-#  ----------
-#  White - 2 Orange, 2 Bells, 1 Cherry, 1 Money
-#  Yellow - 3 Cherry, 1 Bell, 1 Orange, 1 Money
-#
-#  Tile quantity
-#  -------------
-#  Cherry, 35
-#  Orange, 28
-#  Bell, 28
-#  Money, 21
-#
 
 import random
 import os
