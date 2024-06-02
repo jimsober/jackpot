@@ -4,7 +4,7 @@ import json
 import os
 
 os.system('clear')
-with open('high_scores.dat') as json_file:
+with open('high_scores.json') as json_file:
     data = json.load(json_file)
     print('High Game Scores')
     print('----------------')
