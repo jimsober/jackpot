@@ -263,8 +263,8 @@ for result in results:
         result_string += tile
 ##
     miss_cnt+=1
-##
-    print('Try count: %s; result_string: %s' % (str(miss_cnt), result_string))
+#
+#    print('Try count: %s; result_string: %s' % (str(miss_cnt), result_string))
     if result_string in uniqs:
         pass
     else:
@@ -274,7 +274,7 @@ for result in results:
         if score > 490:
             counter+=1
 #
-            print('Hit count: %s; Score: %s; Board: %s' % (str(counter), str(score), str(board)))
+#            print('Hit count: %s; Score: %s; Board: %s' % (str(counter), str(score), str(board)))
             filewriter.writerow([score, board])
 
 csvfile.close()
