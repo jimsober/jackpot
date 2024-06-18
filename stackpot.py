@@ -18,7 +18,6 @@ def initialize_board(num_players):
     return board
 
 def board_score(player):
-    player = player - 1
     score = 0
     jackpot_H = False
     jackpot_D = False
@@ -26,7 +25,7 @@ def board_score(player):
     #horizonal consecutive tiles
     L3 = []
     for col in range(3):
-        L3.append(board[player][3][col])
+        L3.append(board[player-1][3][col])
     grouped_L3 = [(k, sum(1 for i in g)) for k,g in groupby(L3)]
     for (tile,count) in grouped_L3:
         if count == 3:
@@ -40,7 +39,7 @@ def board_score(player):
                 score += 100
     L4 = []
     for col in range(4):
-        L4.append(board[player][4][col])
+        L4.append(board[player-1][4][col])
     grouped_L4 = [(k, sum(1 for i in g)) for k,g in groupby(L4)]
     for (tile, count) in grouped_L4:
         if count == 3:
@@ -63,7 +62,7 @@ def board_score(player):
                 score += 200
     L5 = []
     for col in range(6):
-        L5.append(board[player][5][col])
+        L5.append(board[player-1][5][col])
     L5.pop(5)
     grouped_L5 = [(k, sum(1 for i in g)) for k,g in groupby(L5)]
     for (tile, count) in grouped_L5:
@@ -101,9 +100,9 @@ def board_score(player):
 
     #diagonal consecutive tiles
     DL3 = []
-    DL3.append(board[player][3][0])
-    DL3.append(board[player][4][1])
-    DL3.append(board[player][5][2])
+    DL3.append(board[player-1][3][0])
+    DL3.append(board[player-1][4][1])
+    DL3.append(board[player-1][5][2])
     grouped_DL3 = [(k, sum(1 for i in g)) for k,g in groupby(DL3)]
     for (tile,count) in grouped_DL3:
         if count == 3:
@@ -116,9 +115,9 @@ def board_score(player):
             elif tile == "M":
                 score += 100
     DL3a = []
-    DL3a.append(board[player][5][0])
-    DL3a.append(board[player][4][1])
-    DL3a.append(board[player][3][2])
+    DL3a.append(board[player-1][5][0])
+    DL3a.append(board[player-1][4][1])
+    DL3a.append(board[player-1][3][2])
     grouped_DL3a = [(k, sum(1 for i in g)) for k,g in groupby(DL3a)]
     for (tile,count) in grouped_DL3a:
         if count == 3:
@@ -131,10 +130,10 @@ def board_score(player):
             elif tile == "M":
                 score += 100
     DL4 = []
-    DL4.append(board[player][2][0])
-    DL4.append(board[player][3][1])
-    DL4.append(board[player][4][2])
-    DL4.append(board[player][5][3])
+    DL4.append(board[player-1][2][0])
+    DL4.append(board[player-1][3][1])
+    DL4.append(board[player-1][4][2])
+    DL4.append(board[player-1][5][3])
     grouped_DL4 = [(k, sum(1 for i in g)) for k,g in groupby(DL4)]
     for (tile, count) in grouped_DL4:
         if count == 3:
@@ -156,11 +155,11 @@ def board_score(player):
             elif tile == "M":
                 score += 200
     DL5 = []
-    DL5.append(board[player][1][0])
-    DL5.append(board[player][2][1])
-    DL5.append(board[player][3][2])
-    DL5.append(board[player][4][3])
-    DL5.append(board[player][5][4])
+    DL5.append(board[player-1][1][0])
+    DL5.append(board[player-1][2][1])
+    DL5.append(board[player-1][3][2])
+    DL5.append(board[player-1][4][3])
+    DL5.append(board[player-1][5][4])
     grouped_DL5 = [(k, sum(1 for i in g)) for k,g in groupby(DL5)]
     for (tile, count) in grouped_DL5:
         if count == 3:
@@ -201,18 +200,18 @@ def board_score(player):
     bell_cnt = 0
     money_cnt = 0
     row = 0
-    while row < len(board[player]):
+    while row < len(board[player-1]):
         col = 0
-        while col < len(board[player][row]):
+        while col < len(board[player-1][row]):
             if row == 5 and col == 5:
                 pass
-            elif board[player][row][col] == "C":
+            elif board[player-1][row][col] == "C":
                 cherry_cnt += 1
-            elif board[player][row][col] == "O":
+            elif board[player-1][row][col] == "O":
                 orange_cnt += 1
-            elif board[player][row][col] == "B":
+            elif board[player-1][row][col] == "B":
                 bell_cnt += 1
-            elif board[player][row][col] == "M":
+            elif board[player-1][row][col] == "M":
                 money_cnt += 1
             col += 1
         row += 1
