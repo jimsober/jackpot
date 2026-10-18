@@ -8,6 +8,40 @@ import json
 from datetime import datetime
 import getpass
 
+# Debug configuration persisted in config.json
+CONFIG_FILE = 'config.json'
+
+
+def load_config():
+    default = {"debug": False}
+    try:
+        with open(CONFIG_FILE, 'r') as f:
+            data = json.load(f)
+            for k in default.keys():
+                if k in data:
+                    default[k] = data[k]
+    except FileNotFoundError:
+        with open(CONFIG_FILE, 'w') as f:
+            json.dump(default, f)
+    return default
+
+
+def save_config(cfg):
+    try:
+        with open(CONFIG_FILE, 'w') as f:
+            json.dump(cfg, f)
+    except Exception:
+        pass
+
+
+CONFIG = load_config()
+DEBUG = bool(CONFIG.get('debug', False))
+
+
+def dbg(msg):
+    if DEBUG:
+        print(msg)
+
 def initialize_game(num_players):
     game = {}
     player_bonus = {}
@@ -824,12 +858,12 @@ def auto_play(player, rack, preferences, round, choices, valid_cols, doubles, h_
                     if len(choices) == 1:
                         both_played, pit_played = simulate_play(player, rack[player-1][5][5], choices[0])
                         #
-                        print("DEBUG: both_played is %s" % both_played)
-                        print("DEBUG: pit_played is %s" % pit_played)
+                        dbg(f"DEBUG: both_played is {both_played}")
+                        dbg(f"DEBUG: pit_played is {pit_played}")
                         if both_played or (pit_played and rack[player-1][5][5] != choices[0]):
                             found, cherry_tiles, orange_tiles, bell_tiles, money_tiles = next_best_play(player, i, False, cherry_tiles, orange_tiles, bell_tiles, money_tiles)
                             #
-                            print("DEBUG: found is %s" % found)
+                            dbg(f"DEBUG: found is {found}")
                             if found:
                                 cont = False
                                 rack[player-1][5][5] = "_"
@@ -846,7 +880,7 @@ def auto_play(player, rack, preferences, round, choices, valid_cols, doubles, h_
                     else:
                         found, cherry_tiles, orange_tiles, bell_tiles, money_tiles = next_best_play(player, i, False, cherry_tiles, orange_tiles, bell_tiles, money_tiles)
                         #
-                        print("DEBUG: found is %s" % found)
+                        dbg(f"DEBUG: found is {found}")
                         if found:
                             cont = False
                             rack[player-1][5][5] = "_"
@@ -887,12 +921,21 @@ def auto_play(player, rack, preferences, round, choices, valid_cols, doubles, h_
         i = 0
         cont = True
 
+        # attempt best-scoring play first
+        btile, bcol, best_score = best_play_for_choices(player, [choices[0]])
+
+        if btile is not None and bcol is not None:
+            dbg(f"DEBUG: auto_play best-scoring placed {btile} in column {bcol}")
+            rack[player-1][5][bcol] = btile
+            cherry_tiles, orange_tiles, bell_tiles, money_tiles = transact(btile, 'NEGATIVE', cherry_tiles, orange_tiles, bell_tiles, money_tiles)
+            cont = False
+
         #check if choice is preferred and if so if it can be played
         while cont and i < len(preferences[player-1]):
             if preferences[player-1][i] == choices[0]:
                 found, cherry_tiles, orange_tiles, bell_tiles, money_tiles = next_best_play(player, i, True, cherry_tiles, orange_tiles, bell_tiles, money_tiles)
                 #
-                print("DEBUG: found is %s" % found)
+                dbg(f"DEBUG: found is {found}")
                 if found:
                     cont = False
             i += 1
@@ -922,6 +965,15 @@ def auto_play(player, rack, preferences, round, choices, valid_cols, doubles, h_
         play_count = 1
         while play_count <= 1 or (doubles and play_count <= 2):
             rankLoop = True
+
+            # try best-scoring play first
+            btile, bcol, best_score = best_play_for_choices(player, choices)
+            if btile is not None and bcol is not None:
+                dbg(f"DEBUG: auto_play best-scoring placed {btile} in column {bcol}")
+                rack[player-1][5][bcol] = btile
+                cherry_tiles, orange_tiles, bell_tiles, money_tiles = transact(btile, 'NEGATIVE', cherry_tiles, orange_tiles, bell_tiles, money_tiles)
+                rankLoop = False
+
             for tile in ['M','O','B','C']:
                 if rankLoop:
                     cont = True
@@ -933,7 +985,7 @@ def auto_play(player, rack, preferences, round, choices, valid_cols, doubles, h_
                             if tile == preferences[player-1][i]:
                                 found, cherry_tiles, orange_tiles, bell_tiles, money_tiles = next_best_play(player, i, True, cherry_tiles, orange_tiles, bell_tiles, money_tiles)
                                 #
-                                print("DEBUG: found is %s" % found)
+                                dbg(f"DEBUG: found is {found}")
                                 if found:
                                     cont = False
                                     rankLoop = False
@@ -958,7 +1010,7 @@ def auto_play(player, rack, preferences, round, choices, valid_cols, doubles, h_
                 rack[player-1][4][0] = max_tile
                 cherry_tiles, orange_tiles, bell_tiles, money_tiles = transact(max_tile, 'NEGATIVE', cherry_tiles, orange_tiles, bell_tiles, money_tiles)
                 #
-                print("DEBUG: max_tile is %s" % max_tile)
+                dbg(f"DEBUG: max_tile is {max_tile}")
             play_count += 1
 
             #choice not playable as preferred or in dead space
@@ -1025,10 +1077,10 @@ def next_best_play(player, prefs_index, reduce_supply, cherry_tiles, orange_tile
                 pass
     prefs_tile = rack[player-1][5][prefs_index+2]
     #
-    print("DEBUG: prefs_tile is %s" % prefs_tile)
+    dbg(f"DEBUG: prefs_tile is {prefs_tile}")
     playable = non_dead_play(player, choices)
     #
-    print("DEBUG: playable is %s" % playable)
+    dbg(f"DEBUG: playable is {playable}")
     found = False
 
     #strategy for column 3 and lower
@@ -1205,15 +1257,15 @@ def least_bad_play(player, choices, rack, cherry_tiles, orange_tiles, bell_tiles
             else:
                 pass
     #
-    print("DEBUG: open_row is %s" % open_row)
+    dbg(f"DEBUG: open_row is {open_row}")
     if len(choices) == 1:
         tile = choices[0]
         #
-        print("DEBUG: tile is %s" % tile)
+        dbg(f"DEBUG: tile is {tile}")
     else:
         tile = least_bad_tile(player)
         #
-        print("DEBUG: least_bad_tile is %s" % tile)
+        dbg(f"DEBUG: least_bad_tile is {tile}")
     notFound = True
     i = 0
     while notFound and i < len(open_row):
@@ -1355,7 +1407,7 @@ while play_again:
             rack = initialize_rack(num_players)
             (h_jkpt, d_jkpt, cont_round, preferences, cherry_tiles, orange_tiles, bell_tiles, money_tiles) = initialize_round(num_players)
             #
-            print("DEBUG: preferences is %s" % preferences)
+            dbg(f"DEBUG: preferences is {preferences}")
             continue_round = False
             for item in cont_round:
                 if cont_round[item]:
@@ -1416,7 +1468,7 @@ while play_again:
                         valid_cols, rack, preferences, h_jkpt, d_jkpt, cherry_tiles, orange_tiles, bell_tiles, money_tiles = auto_play(player, rack, preferences, round, choices, valid_cols, doubles, h_jkpt, d_jkpt, roll, empty, cherry_tiles, orange_tiles, bell_tiles, money_tiles)
 
                     #
-                    print("DEBUG: preferences is %s" % preferences)
+                    dbg(f"DEBUG: preferences is {preferences}")
                     print_rack(h_jkpt, d_jkpt, round, player, cherry_tiles, orange_tiles, bell_tiles, money_tiles)
                     if player == 1:
                         input("End of turn, player %s. Press any key to continue. " % str(player))
@@ -1506,4 +1558,22 @@ while play_again:
         else:
             sound_bell()
             print()
+
+def best_play_for_choices(player, choices):
+    best_score = -1
+    best_tile = None
+    best_col = None
+    for tile in choices:
+        for col in range(5):
+            if rack[player-1][5][col] == '_':
+                rack[player-1][5][col] = tile
+                score, _, _ = rack_score(player)
+                rack[player-1][5][col] = '_'
+                if score > best_score:
+                    best_score = score
+                    best_tile = tile
+                    best_col = col
+    if best_tile is not None and best_col is not None:
+        dbg(f"DEBUG: best_play selected {best_tile} at col {best_col} with score {best_score}")
+    return best_tile, best_col, best_score
 
