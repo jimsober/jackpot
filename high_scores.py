@@ -2,9 +2,11 @@
 
 import json
 import os
+import sys
 
 os.system('clear')
-with open('high_scores.json') as json_file:
+scores_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'high_scores.json')
+with open(scores_path) as json_file:
     data = json.load(json_file)
     print('High Game Scores')
     print('----------------')
