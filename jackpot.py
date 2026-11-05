@@ -1,4 +1,4 @@
-#!/usr/local/bin/python3
+#!/usr/bin/env python3
 
 import random
 import os
@@ -6,10 +6,14 @@ import sys
 import math
 from itertools import groupby
 import json
+import logging
 from datetime import datetime
 import getpass
 from enum import IntEnum
 import os as _os
+
+from shared_logger import get_logger, _load_config
+from high_scores import ensure_high_scores_file
 
 class LogLevel(IntEnum):
     ERROR = 40
@@ -43,52 +47,35 @@ class Logger:
         if self._should(LogLevel.ERROR):
             print(f"ERROR: {msg}")
 
-# Debug configuration persisted in config.json
-CONFIG_FILE = 'config.json'
+# Configuration persisted in config.json
+SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
+CONFIG_FILE = os.path.join(SCRIPT_DIR, 'config.json')
 
 
 def load_config():
-    default = {"logLevel": "ERROR"}
-    try:
-        with open(CONFIG_FILE, 'r') as f:
-            data = json.load(f)
-            for k in default.keys():
-                if k in data:
-                    default[k] = data[k]
-    except FileNotFoundError:
-        with open(CONFIG_FILE, 'w') as f:
-            json.dump(default, f)
-    return default
+    return _load_config()
 
 
 def save_config(cfg):
     try:
         with open(CONFIG_FILE, 'w') as f:
-            json.dump(cfg, f)
+            json.dump(cfg, f, indent=2)
     except Exception:
         pass
 
 
 CONFIG = load_config()
 
-# Determine log level: env var overrides config
-_env_level = _os.getenv("LOG_LEVEL", "").upper().strip()
-_cfg_level = str(CONFIG.get("logLevel", "ERROR")).upper()
+LOGGER = get_logger("jackpot")
 
-_name_to_level = {
-    "ERROR": LogLevel.ERROR,
-    "WARNING": LogLevel.WARNING,
-    "WARN": LogLevel.WARNING,
-    "INFO": LogLevel.INFO,
-    "DEBUG": LogLevel.DEBUG,
-}
 
-if _env_level in _name_to_level:
-    active_level = _name_to_level[_env_level]
-else:
-    active_level = _name_to_level.get(_cfg_level, LogLevel.INFO)
+class _ActiveLevel(str):
+    @property
+    def name(self):
+        return str(self)
 
-LOGGER = Logger(level=active_level)
+
+active_level = _ActiveLevel(logging.getLevelName(LOGGER.getEffectiveLevel()))
 
 
 def initialize_game(num_players):
@@ -1179,7 +1166,9 @@ def high_scores(scope, player, score, num_players, round):
     else:
         user_name = "Player "+str(player)
 
-    with open('high_scores.json') as json_file:
+    scores_path = ensure_high_scores_file()
+
+    with open(scores_path) as json_file:
         data = json.load(json_file)
         newData = data.copy()
 
@@ -1204,7 +1193,7 @@ def high_scores(scope, player, score, num_players, round):
                         'user': user_name,
                         'date': dt_string
                     })
-                    with open('high_scores.json','w') as outfile:
+                    with open(scores_path,'w') as outfile:
                         json.dump(newData, outfile)
                 elif g['score'] == score and tieScore:
                     print()
@@ -1231,7 +1220,7 @@ def high_scores(scope, player, score, num_players, round):
                         'user': user_name,
                         'date': dt_string
                     })
-                    with open('high_scores.json','w') as outfile:
+                    with open(scores_path,'w') as outfile:
                         json.dump(newData, outfile)
                 elif r['score'] == score and tieScore:
                     print()

@@ -57,7 +57,6 @@ On first launch, if `high_scores.json` doesn’t exist, the app will create it b
 
 ### Options
 
-- `debug` (boolean): Legacy switch. If `true` and the `LOG_LEVEL` environment variable is not set, forces `DEBUG` logging (overrides `logLevel`). Default: `false`.
 - `logLevel` (string): One of `DEBUG`, `INFO`, `WARNING`, `ERROR`, `CRITICAL`. Controls both console and file handler levels. Default: `INFO`.
 - `logFile` (string): File name for the log file. Resolved relative to the script directory. Default: `jackpot_log.json`.
 - `logMaxBytes` (integer): Maximum size in bytes for a single log file before rotation. Default: `1048576` (1 MB).
@@ -65,16 +64,12 @@ On first launch, if `high_scores.json` doesn’t exist, the app will create it b
 
 ### Logging
 
-The app uses Python’s `logging` framework with a rotating file handler and JSON-formatted file logs:
+All scripts use a shared rotating JSON logger defined in 
 
-- File logs: JSON entries written to `logFile`. Each record includes `time` (ISO 8601 with timezone), `level`, `name`, `message`, `module`, `func`, `line`, and optional `exc_info` when exceptions occur.
-- Console logs: Human-readable text with timestamp, level, and message.
-- Rotation: When the log file size reaches `logMaxBytes`, it is rotated to `logFile.1`; older files are shifted and the oldest is dropped after `logBackupCount` backups.
-- Level precedence: `LOG_LEVEL` environment variable overrides `config.json`. If unset, the legacy `debug` flag can force `DEBUG`; otherwise `logLevel` is used.
-- Paths: `config.json`, `high_scores.json`, and `logFile` are all resolved relative to the directory containing `jackpot.py`.
+`shared_logger.py`
 
-Example JSON log entry:
+Use it by importing and requesting a named logger:
 
-```json
-{"time":"2026-10-31T12:34:56-07:00","level":"INFO","name":"jackpot","message":"Starting game with log level INFO","module":"jackpot","func":"<module>","line":123}
-
+```python
+from shared_logger import get_logger
+LOGGER = get_logger("your_module_name")
