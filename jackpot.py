@@ -1397,7 +1397,7 @@ if __name__ == "__main__":
                 if len(high_player) == 1:
                     print("The round %s high round bonus of %s goes to player %s." % (str(round), str(bonus_score[round-1]), str(int(high_player[0]))))
                     LOGGER.info(f"Round {round} high round bonus {bonus_score[round-1]} awarded to player {int(high_player[0])}")
-                    high_scores("ROUND", int(high_player[0])-1, max(round_values), num_players, round-1)
+                    high_scores("ROUND", int(high_player[0]), max(round_values), num_players, round-1)
                 else:
                     print("The round %s high round bonus of %s goes to players %s." % (str(round), str(bonus_score[round-1]), str(high_player)))
                     LOGGER.info(f"Round {round} high round bonus {bonus_score[round-1]} awarded to players {high_player}")
@@ -1429,7 +1429,7 @@ if __name__ == "__main__":
             if len(high_player) == 1:
                 print("The winner is player " + str(high_player[0]+1) + " with " + str(max(total)) + " points!")
                 LOGGER.info(f"Game winner: player {high_player[0]+1} with {max(total)} points")
-                high_scores("GAME", int(high_player[0]), max(total), num_players, round-1)
+                high_scores("GAME", int(high_player[0])+1, max(total), num_players, round-1)
             elif len(high_player) == 2:
                 print('The winners are players '+str(high_player[0]+1)+' and '+str(high_player[1]+1)+' with ' + str(max(total)) + ' points!')
                 LOGGER.info(f"Game winners: players {high_player[0]+1} and {high_player[1]+1} with {max(total)} points")

@@ -199,6 +199,37 @@ class TestJackpotRobot(unittest.TestCase):
         finally:
             builtins.input = orig_input
 
+    def test_high_scores_player_identification(self):
+        import tempfile
+        import json
+        import getpass
+
+        with tempfile.NamedTemporaryFile('w', delete=False) as f:
+            tmp_path = f.name
+            json.dump({
+                'highGame': [{'players': 4, 'score': 1000, 'user': 'Player 4', 'date': '01/01/2019 09:00:00'}],
+                'highRound': [{'players': 4, 'score': 400, 'user': 'Player 4', 'date': '01/01/2019 09:00:00'}]
+            }, f)
+
+        orig_ensure = jackpot.ensure_high_scores_file
+        jackpot.ensure_high_scores_file = lambda: tmp_path
+        try:
+            # Player 3 setting high round score
+            jackpot.high_scores('ROUND', 3, 550, 4, 1)
+            with open(tmp_path) as f:
+                data = json.load(f)
+            self.assertEqual(data['highRound'][0]['user'], 'Player 3')
+
+            # Player 1 setting high game score
+            jackpot.high_scores('GAME', 1, 1500, 4, 3)
+            with open(tmp_path) as f:
+                data = json.load(f)
+            self.assertEqual(data['highGame'][0]['user'], getpass.getuser())
+        finally:
+            jackpot.ensure_high_scores_file = orig_ensure
+            if os.path.exists(tmp_path):
+                os.remove(tmp_path)
+
 
 if __name__ == '__main__':
     unittest.main()
