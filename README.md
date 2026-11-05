@@ -57,7 +57,7 @@ On first launch, if `high_scores.json` doesn’t exist, the app will create it b
 
 ### Options
 
-- `logLevel` (string): One of `DEBUG`, `INFO`, `WARNING`, `ERROR`, `CRITICAL`. Controls both console and file handler levels. Default: `INFO`.
+- `logLevel` (string): One of `DEBUG`, `INFO`, `WARNING`, `ERROR`, `CRITICAL`. Controls both console and file handler levels. Default: `CRITICAL`.
 - `logFile` (string): File name for the log file. Resolved relative to the script directory. Default: `jackpot_log.json`.
 - `logMaxBytes` (integer): Maximum size in bytes for a single log file before rotation. Default: `1048576` (1 MB).
 - `logBackupCount` (integer): Number of rotated log files to keep (`jackpot_log.json.1`, `jackpot_log.json.2`, …). Default: `5`.

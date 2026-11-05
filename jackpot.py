@@ -538,7 +538,9 @@ def roll_dice():
         tile_choices = ["C", "O", "B", "M"]
     return dice, tile_choices, double_tiles, empty_pit
 
-def pit_tile(player, round, choices, valid_cols, h_jkpt, d_jkpt, roll, swap, cherry_tiles, orange_tiles, bell_tiles, money_tiles):
+def pit_tile(player, round, choices, valid_cols, h_jkpt, d_jkpt, roll, swap, cherry_tiles, orange_tiles, bell_tiles, money_tiles, doubles=None):
+    if doubles is None:
+        doubles = globals().get('doubles', False)
     print("Your tile selection: ", end = '')
     colorize(choices)
     print("\r")
@@ -607,7 +609,7 @@ def pit_tile(player, round, choices, valid_cols, h_jkpt, d_jkpt, roll, swap, che
                     else:
                         sound_bell()
                         LOGGER.warning("Invalid pit swap selection")
-            cherry_tiles, orange_tiles, bell_tiles, money_tiles = transact(selection.upper(), 'NEGATIVE', cherry_tiles, orange_tiles, bell_tiles, money_tiles)
+                cherry_tiles, orange_tiles, bell_tiles, money_tiles = transact(selection.upper(), 'NEGATIVE', cherry_tiles, orange_tiles, bell_tiles, money_tiles)
         elif use_pit.upper() == "N":
             LOGGER.info(f"Player {player} keeps pit tile as is")
             input_err = False
@@ -617,6 +619,7 @@ def pit_tile(player, round, choices, valid_cols, h_jkpt, d_jkpt, roll, swap, che
     return valid_cols, h_jkpt, d_jkpt, swap, cherry_tiles, orange_tiles, bell_tiles, money_tiles
 
 def select_tiles(player, round, choices, valid_cols, doubles, h_jkpt, d_jkpt, roll, swap, cherry_tiles, orange_tiles, bell_tiles, money_tiles):
+    undo = False
     if len(choices) == 1 and swap == False:
         if check_supply(choices[0]):
             print("Your tile selection is ['", end = '')
@@ -1329,7 +1332,7 @@ if __name__ == "__main__":
                                 sound_bell()
                                 print("You have the option to play or remove the pit tile!")
                                 print()
-                                (valid_cols, h_jkpt, d_jkpt, swap, cherry_tiles, orange_tiles, bell_tiles, money_tiles) = pit_tile(player, round, choices, valid_cols, h_jkpt, d_jkpt, roll, swap, cherry_tiles, orange_tiles, bell_tiles, money_tiles)
+                                (valid_cols, h_jkpt, d_jkpt, swap, cherry_tiles, orange_tiles, bell_tiles, money_tiles) = pit_tile(player, round, choices, valid_cols, h_jkpt, d_jkpt, roll, swap, cherry_tiles, orange_tiles, bell_tiles, money_tiles, doubles=doubles)
     
                             #select tiles
                             play_cnt = 1

@@ -1,5 +1,5 @@
 {
-  "logLevel": "INFO",
+  "logLevel": "CRITICAL",
   "logFile": "jackpot_log.json",
   "logMaxBytes": 1048576,
   "logBackupCount": 5

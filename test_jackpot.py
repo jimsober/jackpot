@@ -164,6 +164,41 @@ class TestJackpotRobot(unittest.TestCase):
         finally:
             builtins.input = orig_input
 
+    def test_pit_tile_swap_single_choice(self):
+        jackpot.rack = jackpot.initialize_rack(2)
+        jackpot.rack[0][5][5] = 'O'
+        import builtins
+        orig_input = builtins.input
+        builtins.input = lambda *args: 'S'
+        try:
+            valid_cols, h_jkpt, d_jkpt, swap, c, o, b, m = jackpot.pit_tile(
+                1, 1, ['C'], [1, 2, 3, 4, 5], False, False, ['C', 'C', 'C', 'O'], False, 10, 10, 10, 10
+            )
+            self.assertTrue(swap)
+            self.assertEqual(jackpot.rack[0][5][5], 'C')
+            self.assertEqual(c, 9)
+            self.assertEqual(o, 11)
+        finally:
+            builtins.input = orig_input
+
+    def test_pit_tile_swap_multiple_choices(self):
+        jackpot.rack = jackpot.initialize_rack(2)
+        jackpot.rack[0][5][5] = 'O'
+        import builtins
+        orig_input = builtins.input
+        inputs = ['S', 'M']
+        builtins.input = lambda *args: inputs.pop(0)
+        try:
+            valid_cols, h_jkpt, d_jkpt, swap, c, o, b, m = jackpot.pit_tile(
+                1, 1, ['C', 'M'], [1, 2, 3, 4, 5], False, False, ['C', 'C', 'M', 'M'], False, 10, 10, 10, 10
+            )
+            self.assertTrue(swap)
+            self.assertEqual(jackpot.rack[0][5][5], 'M')
+            self.assertEqual(m, 9)
+            self.assertEqual(o, 11)
+        finally:
+            builtins.input = orig_input
+
 
 if __name__ == '__main__':
     unittest.main()

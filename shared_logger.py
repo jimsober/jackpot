@@ -9,7 +9,7 @@ def _load_config():
     # Defaults align with README
     default = {
         "debug": False,
-        "logLevel": "INFO",
+        "logLevel": "CRITICAL",
         "logFile": "jackpot_log.json",
         "logMaxBytes": 1048576,
         "logBackupCount": 5,
@@ -67,8 +67,8 @@ def get_logger(name: str) -> logging.Logger:
     elif cfg.get("debug"):
         level_name = "DEBUG"
     else:
-        level_name = str(cfg.get("logLevel", "INFO")).upper()
-    level = getattr(logging, level_name, logging.INFO)
+        level_name = str(cfg.get("logLevel", "CRITICAL")).upper()
+    level = getattr(logging, level_name, logging.CRITICAL)
 
     logger = logging.getLogger(name)
     logger.setLevel(level)
