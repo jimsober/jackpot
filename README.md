@@ -50,7 +50,7 @@ Create a csv file with the score for every unique rack combination.
 The game reads settings from a `config.json` file located in the same directory as `jackpot.py`. All important files are anchored to this script directory so you can run the game from any working directory without path issues:
 
 - `config.json` (configuration)
-- `jackpot.log` (log output)
+- `jackpot_log.json` (log output)
 - `high_scores.json` (high score data)
 
 On first launch, if `high_scores.json` doesn’t exist, the app will create it by copying `high_scores.default` if present; otherwise it creates a minimal structure.
@@ -59,9 +59,9 @@ On first launch, if `high_scores.json` doesn’t exist, the app will create it b
 
 - `debug` (boolean): Legacy switch. If `true` and the `LOG_LEVEL` environment variable is not set, forces `DEBUG` logging (overrides `logLevel`). Default: `false`.
 - `logLevel` (string): One of `DEBUG`, `INFO`, `WARNING`, `ERROR`, `CRITICAL`. Controls both console and file handler levels. Default: `INFO`.
-- `logFile` (string): File name for the log file. Resolved relative to the script directory. Default: `jackpot.log`.
+- `logFile` (string): File name for the log file. Resolved relative to the script directory. Default: `jackpot_log.json`.
 - `logMaxBytes` (integer): Maximum size in bytes for a single log file before rotation. Default: `1048576` (1 MB).
-- `logBackupCount` (integer): Number of rotated log files to keep (`jackpot.log.1`, `jackpot.log.2`, …). Default: `5`.
+- `logBackupCount` (integer): Number of rotated log files to keep (`jackpot_log.json.1`, `jackpot_log.json.2`, …). Default: `5`.
 
 ### Logging
 
