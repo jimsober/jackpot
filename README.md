@@ -45,3 +45,31 @@ Create a csv file with the tile_choices, double_tiles flag, and empty_pit flag f
 
 ### racks.py
 Create a csv file with the score for every unique rack combination.
+## Configuration
+
+The game reads settings from a `config.json` file located in the same directory as `jackpot.py`. All important files are anchored to this script directory so you can run the game from any working directory without path issues:
+
+- `config.json` (configuration)
+- `jackpot_log.json` (log output)
+- `high_scores.json` (high score data)
+
+On first launch, if `high_scores.json` doesn’t exist, the app will create it by copying `high_scores.default` if present; otherwise it creates a minimal structure.
+
+### Options
+
+- `logLevel` (string): One of `DEBUG`, `INFO`, `WARNING`, `ERROR`, `CRITICAL`. Controls both console and file handler levels. Default: `CRITICAL`.
+- `logFile` (string): File name for the log file. Resolved relative to the script directory. Default: `jackpot_log.json`.
+- `logMaxBytes` (integer): Maximum size in bytes for a single log file before rotation. Default: `1048576` (1 MB).
+- `logBackupCount` (integer): Number of rotated log files to keep (`jackpot_log.json.1`, `jackpot_log.json.2`, …). Default: `5`.
+
+### Logging
+
+All scripts use a shared rotating JSON logger defined in 
+
+`shared_logger.py`
+
+Use it by importing and requesting a named logger:
+
+```python
+from shared_logger import get_logger
+LOGGER = get_logger("your_module_name")

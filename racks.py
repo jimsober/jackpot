@@ -2,6 +2,30 @@
 import csv
 import itertools
 
+from enum import IntEnum
+import os as _os
+
+class LogLevel(IntEnum):
+    ERROR = 40
+    WARNING = 30
+    INFO = 20
+    DEBUG = 10
+
+class Logger:
+    def __init__(self, level: int = LogLevel.INFO):
+        self.level = level
+    def _should(self, level: int) -> bool:
+        return int(level) >= int(self.level)
+    def info(self, msg: str):
+        if self._should(LogLevel.INFO):
+            print(f"INFO: {msg}")
+    def debug(self, msg: str):
+        if self._should(LogLevel.DEBUG):
+            print(f"DEBUG: {msg}")
+
+_env_level = _os.getenv("LOG_LEVEL", "INFO").upper().strip()
+LOGGER = Logger(level=LogLevel.DEBUG if _env_level == "DEBUG" else LogLevel.INFO)
+
 csvfile =  open('racks_results.csv', 'w')
 filewriter = csv.writer(csvfile)
 filewriter.writerow(['score', 'board'])
@@ -272,6 +296,7 @@ for result in results:
         board = create_board(result_string)
         score = board_score(board)
         if score > 490:
+            LOGGER.debug(f"High-scoring board found: score={score}")
             counter+=1
 #
 #            print('Hit count: %s; Score: %s; Board: %s' % (str(counter), str(score), str(board)))

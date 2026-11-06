@@ -4,6 +4,30 @@ import os
 import sys
 from itertools import groupby
 
+from enum import IntEnum
+import os as _os
+
+class LogLevel(IntEnum):
+    ERROR = 40
+    WARNING = 30
+    INFO = 20
+    DEBUG = 10
+
+class Logger:
+    def __init__(self, level: int = LogLevel.INFO):
+        self.level = level
+    def _should(self, level: int) -> bool:
+        return int(level) >= int(self.level)
+    def debug(self, msg: str):
+        if self._should(LogLevel.DEBUG):
+            print(f"DEBUG: {msg}")
+    def info(self, msg: str):
+        if self._should(LogLevel.INFO):
+            print(f"INFO: {msg}")
+
+_env_level = _os.getenv("LOG_LEVEL", "INFO").upper().strip()
+LOGGER = Logger(level=LogLevel.DEBUG if _env_level == "DEBUG" else LogLevel.INFO)
+
 def initialize_game(num_players):
     game = {}
     for i in range(num_players):
@@ -330,3 +354,4 @@ while play_again:
         else:
             sound_bell()
             print
+
