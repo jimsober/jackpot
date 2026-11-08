@@ -199,6 +199,37 @@ class TestJackpotRobot(unittest.TestCase):
         finally:
             builtins.input = orig_input
 
+    def test_pit_tile_swap_uses_rolled_tile_only(self):
+        # Ensure swapping returns pit tile to supply and uses only a rolled tile for the new pit
+        import builtins
+        jackpot.rack = jackpot.initialize_rack(1)
+        # Put an Orange in the pit initially
+        jackpot.rack[0][5][5] = 'O'
+
+        # Start with small but sufficient supply counts
+        cherry_tiles, orange_tiles, bell_tiles, money_tiles = 2, 2, 2, 2
+
+        # Rolled choices include Cherry and Money; we'll select Cherry via mocked input
+        # Simulate inputs: first 'S' to choose Swap, then 'C' to select Cherry for the pit
+        orig_input = builtins.input
+        inputs = ['S', 'C']
+        builtins.input = lambda *args: inputs.pop(0)
+        try:
+            valid_cols, h_jkpt, d_jkpt, swap, c, o, b, m = jackpot.pit_tile(
+                1, 1, ['C', 'M'], [1, 2, 3, 4, 5], {0: False}, {0: False}, ['C', 'M', 'C', 'O'], False,
+                cherry_tiles, orange_tiles, bell_tiles, money_tiles
+            )
+        finally:
+            builtins.input = orig_input
+
+        # After swap: pit should be 'C'; supply: +1 O (returned), -1 C (used)
+        self.assertTrue(swap)
+        self.assertEqual(jackpot.rack[0][5][5], 'C')
+        self.assertEqual(c, cherry_tiles - 1)
+        self.assertEqual(o, orange_tiles + 1)
+        self.assertEqual(b, bell_tiles)
+        self.assertEqual(m, money_tiles)
+
     def test_high_scores_player_identification(self):
         import tempfile
         import json
@@ -230,6 +261,112 @@ class TestJackpotRobot(unittest.TestCase):
             if os.path.exists(tmp_path):
                 os.remove(tmp_path)
 
+    def test_rack_bonus_calculation(self):
+        import scoring
+        self.assertEqual(scoring.calculate_rack_bonus({'C': 9, 'O': 2, 'B': 1, 'M': 1}), 100)
+        self.assertEqual(scoring.calculate_rack_bonus({'C': 8, 'O': 7, 'B': 0, 'M': 0}), 120)
+        self.assertEqual(scoring.calculate_rack_bonus({'C': 7, 'O': 7, 'B': 1, 'M': 0}), 100)
+        self.assertEqual(scoring.calculate_rack_bonus({'C': 8, 'O': 3, 'B': 2, 'M': 1}), 70)
+        self.assertEqual(scoring.calculate_rack_bonus({'C': 7, 'O': 4, 'B': 2, 'M': 1}), 50)
+        self.assertEqual(scoring.calculate_rack_bonus({'C': 6, 'O': 5, 'B': 2, 'M': 1}), 0)
+
+    def test_check_supply_parameters(self):
+        # Explicit supply parameters
+        self.assertTrue(jackpot.check_supply('C', cherry_tiles=5, orange_tiles=0, bell_tiles=0, money_tiles=0))
+        self.assertFalse(jackpot.check_supply('C', cherry_tiles=0, orange_tiles=5, bell_tiles=5, money_tiles=5))
+        self.assertTrue(jackpot.check_supply('M', cherry_tiles=0, orange_tiles=0, bell_tiles=0, money_tiles=1))
+        self.assertFalse(jackpot.check_supply('M', cherry_tiles=0, orange_tiles=0, bell_tiles=0, money_tiles=0))
+
+    def test_select_tiles_depleted_supply_filtering(self):
+        import builtins
+        orig_input = builtins.input
+        inputs = ["1", ""]
+        builtins.input = lambda *args: inputs.pop(0) if inputs else ""
+        try:
+            jackpot.rack = jackpot.initialize_rack(1)
+            jackpot.game, jackpot.player_bonus, _ = jackpot.initialize_game(1)
+            # C and O both depleted, only B available
+            choices = ['C', 'O', 'B']
+            valid_cols, undo, c, o, b, m = jackpot.select_tiles(
+                1, 1, choices, [1, 2, 3, 4, 5], False, {0: False}, {0: False},
+                ['C', 'O', 'B', 'M'], False, 0, 0, 5, 0
+            )
+            # Only B could be selected and placed
+            self.assertEqual(b, 4)
+            self.assertEqual(jackpot.rack[0][5][0], 'B')
+        finally:
+            builtins.input = orig_input
+
+    def test_shared_scoring_consistency(self):
+        import racks
+        import stackpot
+        import scoring
+
+        # Create identical sample rack
+        sample = racks.create_board('MMMMMOOOOBBBCCC')
+        score1, jh1, jd1 = scoring.score_board(sample[0])
+        score2 = racks.board_score(sample)
+        score3, jh3, jd3 = stackpot.board_score(1, sample)
+
+        self.assertEqual(score1, score2)
+        self.assertEqual(score1, score3)
+        self.assertEqual(jh1, jh3)
+        self.assertEqual(jd1, jd3)
+
+    def test_high_scores_top_five_ranking_and_truncation(self):
+        import tempfile
+        import json
+        import high_scores
+
+        with tempfile.NamedTemporaryFile('w', delete=False) as f:
+            tmp_path = f.name
+            json.dump({'highGame': [], 'highRound': []}, f)
+
+        try:
+            scores_to_add = [500, 1200, 800, 1500, 950, 700]
+            for s in scores_to_add:
+                high_scores.record_high_score('GAME', f'User_{s}', s, 4, max_entries=5, scores_path=tmp_path)
+
+            data = high_scores.load_high_scores(tmp_path)
+            game_4p = [e for e in data['highGame'] if e['players'] == 4]
+            # Must have exactly 5 entries
+            self.assertEqual(len(game_4p), 5)
+            # Scores must be sorted descending: [1500, 1200, 950, 800, 700]
+            scores_in_file = [e['score'] for e in game_4p]
+            self.assertEqual(scores_in_file, [1500, 1200, 950, 800, 700])
+            self.assertEqual(game_4p[0]['user'], 'User_1500')
+            self.assertEqual(game_4p[4]['user'], 'User_700')
+        finally:
+            if os.path.exists(tmp_path):
+                os.remove(tmp_path)
+
+    def test_simulation_tournament_structure(self):
+        import io
+        from contextlib import redirect_stdout
+
+        stats = jackpot.simulate_tournament(num_games=3, num_players=2, seed=42)
+        self.assertEqual(stats['num_games'], 3)
+        self.assertEqual(stats['num_players'], 2)
+        self.assertGreater(stats['duration_seconds'], 0)
+        self.assertEqual(len(stats['all_game_scores']), 6)
+        self.assertIn('wins', stats)
+        self.assertIn('ties', stats)
+
+        f = io.StringIO()
+        with redirect_stdout(f):
+            jackpot.print_simulation_report(stats)
+        output = f.getvalue()
+        self.assertIn("JACKPOT TOURNAMENT SIMULATION REPORT", output)
+        self.assertIn("PLAYER PERFORMANCE BY SEAT", output)
+
+    def test_high_scores_formatting(self):
+        import high_scores
+        output = high_scores.format_leaderboard()
+        self.assertIn("JACKPOT LEADERBOARDS", output)
+        self.assertIn("HIGH GAME SCORES", output)
+        self.assertIn("HIGH ROUND SCORES", output)
+
 
 if __name__ == '__main__':
     unittest.main()
+
