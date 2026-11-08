@@ -199,6 +199,37 @@ class TestJackpotRobot(unittest.TestCase):
         finally:
             builtins.input = orig_input
 
+    def test_pit_tile_swap_uses_rolled_tile_only(self):
+        # Ensure swapping returns pit tile to supply and uses only a rolled tile for the new pit
+        import builtins
+        jackpot.rack = jackpot.initialize_rack(1)
+        # Put an Orange in the pit initially
+        jackpot.rack[0][5][5] = 'O'
+
+        # Start with small but sufficient supply counts
+        cherry_tiles, orange_tiles, bell_tiles, money_tiles = 2, 2, 2, 2
+
+        # Rolled choices include Cherry and Money; we'll select Cherry via mocked input
+        # Simulate inputs: first 'S' to choose Swap, then 'C' to select Cherry for the pit
+        orig_input = builtins.input
+        inputs = ['S', 'C']
+        builtins.input = lambda *args: inputs.pop(0)
+        try:
+            valid_cols, h_jkpt, d_jkpt, swap, c, o, b, m = jackpot.pit_tile(
+                1, 1, ['C', 'M'], [1, 2, 3, 4, 5], {0: False}, {0: False}, ['C', 'M', 'C', 'O'], False,
+                cherry_tiles, orange_tiles, bell_tiles, money_tiles
+            )
+        finally:
+            builtins.input = orig_input
+
+        # After swap: pit should be 'C'; supply: +1 O (returned), -1 C (used)
+        self.assertTrue(swap)
+        self.assertEqual(jackpot.rack[0][5][5], 'C')
+        self.assertEqual(c, cherry_tiles - 1)
+        self.assertEqual(o, orange_tiles + 1)
+        self.assertEqual(b, bell_tiles)
+        self.assertEqual(m, money_tiles)
+
     def test_high_scores_player_identification(self):
         import tempfile
         import json
@@ -338,3 +369,4 @@ class TestJackpotRobot(unittest.TestCase):
 
 if __name__ == '__main__':
     unittest.main()
+

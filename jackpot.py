@@ -418,36 +418,56 @@ def pit_tile(player, round, choices, valid_cols, h_jkpt, d_jkpt, roll, swap, che
                 print("Doubles!")
                 print()
         elif use_pit.upper() == "S":
+            # Swap means: return current pit tile to supply, then place ONE of the rolled tiles into the pit.
+            # It must NOT pull an arbitrary tile from supply beyond the selected rolled tile.
+            # Filter rolled choices by supply availability so we don't go negative.
             available_swap_choices = [c for c in choices if check_supply(c, cherry_tiles, orange_tiles, bell_tiles, money_tiles)]
             if not available_swap_choices:
                 sound_bell()
-                LOGGER.warning("Cannot swap pit tile: none of the choices are available in supply")
+                LOGGER.warning("Cannot swap pit tile: none of the rolled tiles are available in supply")
                 print("None of the rolled tiles are available in the supply to swap into the pit.")
                 input("Press <Enter> to continue. ")
                 print()
             else:
-                input_err = False
-                cherry_tiles, orange_tiles, bell_tiles, money_tiles = transact(rack[player-1][5][5], 'POSITIVE', cherry_tiles, orange_tiles, bell_tiles, money_tiles)
-                swap = True
+                # Step 1: Return existing pit tile to supply
+                old_pit = rack[player-1][5][5]
+                cherry_tiles, orange_tiles, bell_tiles, money_tiles = transact(old_pit, 'POSITIVE', cherry_tiles, orange_tiles, bell_tiles, money_tiles)
+
+                # Step 2: Choose which rolled tile to place into pit (must be from available_swap_choices)
                 if len(available_swap_choices) == 1:
-                    rack[player-1][5][5] = available_swap_choices[0]
-                    LOGGER.info(f"Player {player} swaps pit tile with {available_swap_choices[0]}")
-                    cherry_tiles, orange_tiles, bell_tiles, money_tiles = transact(available_swap_choices[0], 'NEGATIVE', cherry_tiles, orange_tiles, bell_tiles, money_tiles)
+                    new_tile = available_swap_choices[0]
                 else:
                     sel_input_err = True
+                    new_tile = None
                     while sel_input_err:
-                        print("Select a tile from ")
+                        print("Select a tile from ", end='')
                         colorize(available_swap_choices)
                         selection = input(": ").strip().upper()
                         print()
                         if selection in available_swap_choices:
-                            rack[player-1][5][5] = selection
-                            LOGGER.info(f"Player {player} swaps pit tile with {selection}")
+                            new_tile = selection
                             sel_input_err = False
                         else:
                             sound_bell()
                             LOGGER.warning("Invalid pit swap selection")
-                    cherry_tiles, orange_tiles, bell_tiles, money_tiles = transact(selection, 'NEGATIVE', cherry_tiles, orange_tiles, bell_tiles, money_tiles)
+
+                # Step 3: Place the selected rolled tile into the pit and deduct from supply
+                rack[player-1][5][5] = new_tile
+                cherry_tiles, orange_tiles, bell_tiles, money_tiles = transact(new_tile, 'NEGATIVE', cherry_tiles, orange_tiles, bell_tiles, money_tiles)
+                LOGGER.info(f"Player {player} swaps pit tile {old_pit} with {new_tile}")
+                swap = True
+
+                input_err = False
+                valid_cols = col_choices(player)
+                (h_jkpt, d_jkpt) = print_rack(h_jkpt, d_jkpt, round, player, cherry_tiles, orange_tiles, bell_tiles, money_tiles)
+                print("Your roll: ", end = '')
+                colorize(roll)
+                print("\r")
+                print()
+                if doubles:
+                    sound_bell()
+                    print("Doubles!")
+                    print()
         elif use_pit.upper() == "N":
             LOGGER.info(f"Player {player} keeps pit tile as is")
             input_err = False
@@ -1341,6 +1361,9 @@ if __name__ == "__main__":
                                 print("You have the option to play or remove the pit tile!")
                                 print()
                                 (valid_cols, h_jkpt, d_jkpt, swap, cherry_tiles, orange_tiles, bell_tiles, money_tiles) = pit_tile(player, round, choices, valid_cols, h_jkpt, d_jkpt, roll, swap, cherry_tiles, orange_tiles, bell_tiles, money_tiles, doubles=doubles)
+                                if swap:
+                                    num_plays -= 1
+                                    swap = False
     
                             #select tiles
                             play_cnt = 1
