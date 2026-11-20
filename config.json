@@ -4,6 +4,7 @@
   "logFile": "jackpot_log.json",
   "logMaxBytes": 1048576,
   "logBackupCount": 5,
-  "botPacing": 0.75,
-  "botDefenseAlpha": 1.0
+  "botPacing": 0.6,
+  "botTurnPause": 1.6,
+  "botDefenseAlpha": 0.25
 }

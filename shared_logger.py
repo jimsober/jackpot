@@ -14,6 +14,7 @@ def _load_config():
         "logMaxBytes": 1048576,
         "logBackupCount": 5,
         "botPacing": "step",
+        "botTurnPause": 2.0,
         "botDefenseAlpha": 0.0,
     }
     cfg_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'config.json')

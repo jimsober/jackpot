@@ -61,6 +61,12 @@ try:
 except (ValueError, TypeError):
     BOT_PACING_SECONDS = None  # means 'step' mode
 
+BOT_TURN_PAUSE = CONFIG.get("botTurnPause", 2.0)
+try:
+    BOT_TURN_PAUSE_SECONDS = float(BOT_TURN_PAUSE)
+except (ValueError, TypeError):
+    BOT_TURN_PAUSE_SECONDS = 2.0
+
 BOT_DEFENSE_ALPHA = float(CONFIG.get("botDefenseAlpha", 0.0) or 0.0)
 
 
@@ -76,6 +82,15 @@ def bot_pause():
         if BOT_PACING_SECONDS > 0:
             time.sleep(BOT_PACING_SECONDS)
         # if 0.0 -> instant
+
+def bot_turn_pause():
+    """Independent pause at end of a bot's turn, controlled by botTurnPause (seconds). 0 or negative -> no pause; 'step' is ignored here."""
+    try:
+        secs = float(BOT_TURN_PAUSE_SECONDS)
+    except Exception:
+        secs = 0.0
+    if secs and secs > 0:
+        time.sleep(secs)
 
 
 LOGGER = get_logger("jackpot")
@@ -1404,8 +1419,19 @@ if __name__ == "__main__":
         "-l", "--leaderboard", action="store_true",
         help="Display top high score leaderboards and exit"
     )
+    parser.add_argument(
+        "--bot-turn-pause", type=float, default=None,
+        help="Override end-of-turn pause for bot players in seconds (0 to disable)"
+    )
 
     args = parser.parse_args()
+
+    if args.bot_turn_pause is not None:
+        try:
+            BOT_TURN_PAUSE_SECONDS = float(args.bot_turn_pause)
+            LOGGER.info(f"Overriding bot turn pause to {BOT_TURN_PAUSE_SECONDS} seconds via CLI")
+        except (ValueError, TypeError):
+            LOGGER.warning("Invalid --bot-turn-pause value; keeping configured botTurnPause")
 
     if args.leaderboard:
         clear_screen()
@@ -1510,6 +1536,7 @@ if __name__ == "__main__":
                         if player == 1:
                             input("End of turn, player %s. Press any key to continue. " % str(player))
                         else:
+                            bot_turn_pause()
                             print()
                         print()
                     else:
