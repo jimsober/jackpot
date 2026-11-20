@@ -10,6 +10,7 @@
 * 5 of a tile in a row is known as a Jackpot (the name of the game).
 * 7 or more of the same tiles score a rack bonus (see [Scoring](#rack-bonus)).
 * Tiles can become unavailable if supply is depleted (see [Tile quantities](#tile-quantities)).
+* Bot turns are explained in real-time without pausing, providing feedback on doubles, jackpots, pit actions, and tile placements.
 
 ### Dice sides
 * White - 2 Orange, 2 Bell, 1 Cherry, 1 Money
@@ -111,6 +112,7 @@ High score data is stored in `high_scores.json`. The game tracks a **Top-5 Leade
 * **High Round Scores**: Single highest individual round score.
 
 Each leaderboard category maintains top rankings for 2-player, 3-player, and 4-player game formats with player name, score, and timestamp.
+
 ## Configuration
 
 The game reads settings from a `config.json` file located in the same directory as `jackpot.py`. All important files are anchored to this script directory so you can run the game from any working directory without path issues:
@@ -139,3 +141,4 @@ Use it by importing and requesting a named logger:
 ```python
 from shared_logger import get_logger
 LOGGER = get_logger("your_module_name")
+
