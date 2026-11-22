@@ -112,10 +112,7 @@ High score data is stored in `high_scores.json`. The game tracks a **Top-5 Leade
 * **High Round Scores**: Single highest individual round score.
 
 Each leaderboard category maintains top rankings for 2-player, 3-player, and 4-player game formats with player name, score, and timestamp.
-<<<<<<< HEAD
 
-=======
->>>>>>> origin/master
 ## Configuration
 
 The game reads settings from a `config.json` file located in the same directory as `jackpot.py`. All important files are anchored to this script directory so you can run the game from any working directory without path issues:
