@@ -1096,33 +1096,24 @@ def auto_play(player, rack, preferences, round, choices, valid_cols, doubles, h_
                     sound_bell()
                     print()
                     input(f"Player {player} empties pit tile. ")
-<<<<<<< HEAD
                 else:
                     sound_bell()
                     print(f"🤖 Player {player} removed Pit tile [{pt}].")
                     bot_pause()
-=======
->>>>>>> origin/master
             elif act_type == 'USE':
                 col = pit_act[1]
                 pt = rack[player - 1][5][5]
                 rack[player - 1][5][5] = '_'
-<<<<<<< HEAD
                 ok, r, c = drop_tile(rack[player - 1], col, pt)
-=======
                 drop_tile(rack[player - 1], col, pt)
->>>>>>> origin/master
                 if interactive:
                     sound_bell()
                     print()
                     input(f"Player {player} plays pit tile. ")
-<<<<<<< HEAD
                 elif ok:
                     sound_bell()
                     print(f"🤖 Player {player} used Pit tile [{pt}] in Column {col} (Row {r}).")
                     bot_pause()
-=======
->>>>>>> origin/master
             elif act_type == 'SWAP':
                 tile = pit_act[1]
                 pt = rack[player - 1][5][5]
@@ -1137,14 +1128,10 @@ def auto_play(player, rack, preferences, round, choices, valid_cols, doubles, h_
                     sound_bell()
                     print()
                     input(f"Player {player} swaps pit tile. ")
-<<<<<<< HEAD
                 else:
                     sound_bell()
                     print(f"🤖 Player {player} swapped Pit tile [{pt}] with rolled [{tile}].")
                     bot_pause()
-=======
->>>>>>> origin/master
-
         for tile, col in placements:
             ok, r, c = drop_tile(rack[player - 1], col, tile)
             if ok:
@@ -1432,7 +1419,6 @@ if __name__ == "__main__":
         "-l", "--leaderboard", action="store_true",
         help="Display top high score leaderboards and exit"
     )
-<<<<<<< HEAD
     parser.add_argument(
         "--bot-turn-pause", type=float, default=None,
         help="Override end-of-turn pause for bot players in seconds (0 to disable)"
@@ -1447,11 +1433,8 @@ if __name__ == "__main__":
         except (ValueError, TypeError):
             LOGGER.warning("Invalid --bot-turn-pause value; keeping configured botTurnPause")
 
-=======
-
     args = parser.parse_args()
 
->>>>>>> origin/master
     if args.leaderboard:
         clear_screen()
         print_leaderboard()
