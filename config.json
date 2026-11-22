@@ -1,6 +1,10 @@
 {
+  "debug": false,
   "logLevel": "CRITICAL",
   "logFile": "jackpot_log.json",
   "logMaxBytes": 1048576,
-  "logBackupCount": 5
+  "logBackupCount": 5,
+  "botPacing": 0.5,
+  "botTurnPause": 1,
+  "botDefenseAlpha": 0.25
 }

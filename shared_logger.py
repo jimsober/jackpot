@@ -13,6 +13,9 @@ def _load_config():
         "logFile": "jackpot_log.json",
         "logMaxBytes": 1048576,
         "logBackupCount": 5,
+        "botPacing": "step",
+        "botTurnPause": 2.0,
+        "botDefenseAlpha": 0.0,
     }
     cfg_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'config.json')
     try:
@@ -107,3 +110,4 @@ def get_logger(name: str) -> logging.Logger:
             handler.setLevel(level)
 
     return logger
+

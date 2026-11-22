@@ -10,6 +10,7 @@
 * 5 of a tile in a row is known as a Jackpot (the name of the game).
 * 7 or more of the same tiles score a rack bonus (see [Scoring](#rack-bonus)).
 * Tiles can become unavailable if supply is depleted (see [Tile quantities](#tile-quantities)).
+* Bot turns are explained in real-time without pausing, providing feedback on doubles, jackpots, pit actions, and tile placements. Bot explanations honor the `botPacing` configuration between messages and include an additional pause after each bot turn controlled by `botTurnPause`.
 
 ### Dice sides
 * White - 2 Orange, 2 Bell, 1 Cherry, 1 Money
@@ -111,6 +112,7 @@ High score data is stored in `high_scores.json`. The game tracks a **Top-5 Leade
 * **High Round Scores**: Single highest individual round score.
 
 Each leaderboard category maintains top rankings for 2-player, 3-player, and 4-player game formats with player name, score, and timestamp.
+
 ## Configuration
 
 The game reads settings from a `config.json` file located in the same directory as `jackpot.py`. All important files are anchored to this script directory so you can run the game from any working directory without path issues:
@@ -127,6 +129,10 @@ On first launch, if `high_scores.json` doesn’t exist, the app will create it b
 - `logFile` (string): File name for the log file. Resolved relative to the script directory. Default: `jackpot_log.json`.
 - `logMaxBytes` (integer): Maximum size in bytes for a single log file before rotation. Default: `1048576` (1 MB).
 - `logBackupCount` (integer): Number of rotated log files to keep (`jackpot_log.json.1`, `jackpot_log.json.2`, …). Default: `5`.
+- `debug` (boolean): When true, sets logging to DEBUG level for all modules. Default: `false`.
+- `botPacing` (string or number): Controls pacing between bot explanation messages. Use `"step"` to advance with Enter, a positive number (e.g., `0.5`) for seconds between messages, or `0` for instant. Default: `"step"`.
+- `botDefenseAlpha` (number): Weighting factor for defensive sensitivity in the robot’s EV evaluation (how much to penalize enabling opponents). Default: `0.0`.
+- `botTurnPause` (number): Additional pause (in seconds) at the end of each bot turn to review the board state. Set `0` to disable. Default: `2.0`.
 
 ### Logging
 
@@ -139,3 +145,5 @@ Use it by importing and requesting a named logger:
 ```python
 from shared_logger import get_logger
 LOGGER = get_logger("your_module_name")
+
+

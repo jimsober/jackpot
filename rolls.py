@@ -1,5 +1,8 @@
-#!/usr/bin/env python
+#!/usr/bin/env python3
 import csv
+
+# This script enumerates all 1,296 possible outcomes of rolling four dice 
+# and can be used to derive exact per-roll probabilities of tile choices.
 
 csvfile =  open('rolls_results.csv', 'w')
 filewriter = csv.writer(csvfile)
@@ -97,4 +100,22 @@ for white_die1 in range(1,7):
 
 csvfile.close()
 
-
+# Also compute summary probabilities for at-least-one availability per roll
+if __name__ == '__main__':
+    import ast
+    from collections import Counter
+    with open('rolls_results.csv', 'r') as f:
+        import csv
+        r = csv.DictReader(f)
+        counts = Counter()
+        total = 0
+        for row in r:
+            total += 1
+            choices = ast.literal_eval(row['tile_choices']) if row['tile_choices'].startswith('[') else []
+            s = set(choices)
+            for t in ['C','O','B','M']:
+                if t in s:
+                    counts[t] += 1
+        for t in ['C','O','B','M']:
+            p = counts[t]/total if total else 0
+            print(f"P(at least one {t} in roll choices) = {p:.6f}")

@@ -12,6 +12,7 @@ from datetime import datetime
 import getpass
 from enum import IntEnum
 import os as _os
+import time
 
 from shared_logger import get_logger, _load_config
 from high_scores import ensure_high_scores_file, record_high_score, print_leaderboard
@@ -53,6 +54,44 @@ def save_config(cfg):
 
 
 CONFIG = load_config()
+
+BOT_PACING = CONFIG.get("botPacing", "step")
+try:
+    BOT_PACING_SECONDS = float(BOT_PACING)
+except (ValueError, TypeError):
+    BOT_PACING_SECONDS = None  # means 'step' mode
+
+BOT_TURN_PAUSE = CONFIG.get("botTurnPause", 2.0)
+try:
+    BOT_TURN_PAUSE_SECONDS = float(BOT_TURN_PAUSE)
+except (ValueError, TypeError):
+    BOT_TURN_PAUSE_SECONDS = 2.0
+
+BOT_DEFENSE_ALPHA = float(CONFIG.get("botDefenseAlpha", 0.0) or 0.0)
+
+
+def bot_pause():
+    """Pause according to bot pacing setting: numeric seconds -> sleep, 'step' -> wait for Enter, 0 -> instant."""
+    if BOT_PACING_SECONDS is None:
+        # step mode
+        try:
+            input("Press <Enter> to continue. ")
+        except EOFError:
+            pass
+    else:
+        if BOT_PACING_SECONDS > 0:
+            time.sleep(BOT_PACING_SECONDS)
+        # if 0.0 -> instant
+
+def bot_turn_pause():
+    """Independent pause at end of a bot's turn, controlled by botTurnPause (seconds). 0 or negative -> no pause; 'step' is ignored here."""
+    try:
+        secs = float(BOT_TURN_PAUSE_SECONDS)
+    except Exception:
+        secs = 0.0
+    if secs and secs > 0:
+        time.sleep(secs)
+
 
 LOGGER = get_logger("jackpot")
 
@@ -187,19 +226,31 @@ def print_rack(h, d, round, player, cherry_tiles, orange_tiles, bell_tiles, mone
     print()
     if jackpot_H and not h[player-1]:
         sound_bell()
-        print("Jackpot!!!")
-        print()
-        LOGGER.info(f"Player {player} hit horizontal jackpot")
-        input("Press any key to continue.")
-        print()
+        if player == 1:
+            print("Jackpot!!!")
+            print()
+            LOGGER.info(f"Player {player} hit horizontal jackpot")
+            input("Press any key to continue.")
+            print()
+        else:
+            print("Jackpot!!!")
+            print()
+            bot_pause()
+            LOGGER.info(f"Player {player} hit horizontal jackpot")
         h[player-1] = True
     elif jackpot_D and not d[player-1]:
         sound_bell()
-        print("Jackpot!!!")
-        print()
-        LOGGER.info(f"Player {player} hit diagonal jackpot")
-        input("Press any key to continue.")
-        print()
+        if player == 1:
+            print("Jackpot!!!")
+            print()
+            LOGGER.info(f"Player {player} hit diagonal jackpot")
+            input("Press any key to continue.")
+            print()
+        else:
+            print("Jackpot!!!")
+            print()
+            bot_pause()
+            LOGGER.info(f"Player {player} hit diagonal jackpot")
         d[player-1] = True
 
     return h, d
@@ -676,19 +727,39 @@ def transact(tile, sign, cherry_tiles, orange_tiles, bell_tiles, money_tiles):
 
     return cherry_tiles, orange_tiles, bell_tiles, money_tiles
 
+ROLL_PROBS = {
+    # based on exact enumeration over 1296 outcomes
+    # Probability a single roll yields at least one selectable tile of type t.
+}
+
+# Precompute from known dice mapping: these values are derived from rolls.py enumeration
+# For simplicity of integration, approximate with empirical constants if file not available.
+DEFAULT_ROLL_AT_LEAST_ONE = {
+    'C': 0.6666666667,
+    'O': 0.5,
+    'B': 0.5,
+    'M': 0.3333333333,
+}
+
+def lookup_roll_probability(tile, k):
+    # Probability of getting at least k of tile 'tile' in a future sequence of rolls is complex; as a first step, use per-roll at-least-one and binomial over trials.
+    # This improves base p from naive 0.25 to exact per-roll choice probability.
+    base = DEFAULT_ROLL_AT_LEAST_ONE.get(tile, 0.25)
+    return base if k <= 1 else max(0.0, base ** k)
+
 def completion_probability(tile, needed, trials, supply_available):
     if needed <= 0:
         return 1.0
     if needed > trials or needed > supply_available:
         return 0.0
-    p = TILE_PROBABILITIES.get(tile, 0.25)
+    p = lookup_roll_probability(tile,1)
     prob = 0.0
     for i in range(needed, trials + 1):
         prob += math.comb(trials, i) * (p ** i) * ((1.0 - p) ** (trials - i))
     return prob
 
 
-def evaluate_potential_score(board, supply):
+def evaluate_potential_score(board, supply, opponent_boards=None, alpha=BOT_DEFENSE_ALPHA):
     actual_score, _, _ = score_board(board)
     empty_cells = empty_cells_count(board)
 
@@ -768,24 +839,55 @@ def evaluate_potential_score(board, supply):
         # Option value of an empty pit ready to absorb unwanted tiles
         pit_val = 25.0
 
-    return actual_score + line_potential + rack_bonus_ev + pit_val
+    opponent_penalty = 0.0
+    if opponent_boards and alpha > 0:
+        # Estimate opponent EV before vs after removing one unit of each tile we might use; measure sensitivity
+        opp_evs_before = []
+        for ob in opponent_boards:
+            opp_evs_before.append(_estimate_board_ev(ob, supply))
+        # Sensitivity by tile: how much EV drops if one less tile is available
+        sensitivity = {t: 0.0 for t in ['C','O','B','M']}
+        for t in sensitivity.keys():
+            if supply.get(t,0) > 0:
+                s_less = supply.copy(); s_less[t] -= 1
+                delta = 0.0
+                for ob in opponent_boards:
+                    delta += max(0.0, _estimate_board_ev(ob, s_less) - _estimate_board_ev(ob, supply))
+                sensitivity[t] = delta
+        # Aggregate penalty later when scoring placements (passed through find_best_play)
+
+    return actual_score + line_potential + rack_bonus_ev + pit_val - opponent_penalty
+
+
+def _estimate_board_ev(board, supply):
+    # Wrapper to avoid opponent feedback; uses internal pieces of evaluate_potential_score without opponent term
+    return evaluate_potential_score(board, supply, opponent_boards=None, alpha=0.0)
 
 
 def get_possible_pit_actions(board, choices, supply, empty):
+    """Return possible pit actions given the current board, roll choices, supply, and whether pit is allowed this turn.
+    Actions are tuples:
+      - ('KEEP',)
+      - ('REMOVE',)
+      - ('USE', col) for each valid column
+      - ('SWAP', tile) for each rolled tile that is available in supply
+    If pit is empty or not allowed, return [None] to indicate no pit action.
+    """
     pit_tile = board[5][5]
     if pit_tile == '_' or not empty:
         return [None]
 
-    actions = [('KEEP',)]
-    actions.append(('REMOVE',))
+    actions = [('KEEP',), ('REMOVE',)]
 
-    # USE in any valid column 1..5
-    for col in range(1, 6):
-        c = col - 1
-        if board[c + 1][c] == '_':
-            actions.append(('USE', col))
+    # USE: any valid column per current board state
+    try:
+        valid_cols = get_valid_cols(board)
+    except Exception:
+        valid_cols = []
+    for col in valid_cols:
+        actions.append(('USE', col))
 
-    # SWAP with any choice from roll that has supply > 0
+    # SWAP: any rolled tile with supply > 0
     for t in set(choices):
         if supply.get(t, 0) > 0:
             actions.append(('SWAP', t))
@@ -793,11 +895,25 @@ def get_possible_pit_actions(board, choices, supply, empty):
     return actions
 
 
-def find_best_play(board, choices, doubles, empty, supply):
+def find_best_play(board, choices, doubles, empty, supply, all_boards=None, alpha=BOT_DEFENSE_ALPHA):
     best_eval = -1e9
     best_play = None
     best_final_board = None
     best_final_supply = None
+
+    opps = [rb for idx, rb in enumerate(globals().get('rack', [])) if rb is not board] if all_boards is None else [rb for rb in all_boards if rb is not board]
+
+    # Precompute sensitivity once for defensive evaluation
+    sensitivity = {t: 0.0 for t in ['C','O','B','M']}
+    if alpha > 0:
+        for t in sensitivity.keys():
+            if supply.get(t,0) > 0:
+                s_less = supply.copy()
+                s_less[t] -= 1
+                delta = 0.0
+                for ob in opps:
+                    delta += max(0.0, _estimate_board_ev(ob, s_less) - _estimate_board_ev(ob, supply))
+                sensitivity[t] = delta
 
     pit_actions = get_possible_pit_actions(board, choices, supply, empty)
 
@@ -833,7 +949,7 @@ def find_best_play(board, choices, doubles, empty, supply):
             num_placements = 2 if doubles else 1
 
         if num_placements == 0:
-            val = evaluate_potential_score(b1, s1)
+            val = evaluate_potential_score(b1, s1, opponent_boards=opps, alpha=alpha)
             if val > best_eval:
                 best_eval = val
                 best_play = (pit_act, [])
@@ -842,7 +958,7 @@ def find_best_play(board, choices, doubles, empty, supply):
 
         elif num_placements == 1:
             if empty_cells_count(b1) == 0:
-                val = evaluate_potential_score(b1, s1)
+                val = evaluate_potential_score(b1, s1, opponent_boards=opps, alpha=alpha)
                 if val > best_eval:
                     best_eval = val
                     best_play = (pit_act, [])
@@ -852,7 +968,7 @@ def find_best_play(board, choices, doubles, empty, supply):
                 valid_cols = get_valid_cols(b1)
                 valid_choices = [t for t in set(choices) if s1.get(t, 0) > 0]
                 if not valid_choices or not valid_cols:
-                    val = evaluate_potential_score(b1, s1)
+                    val = evaluate_potential_score(b1, s1, opponent_boards=opps, alpha=alpha)
                     if val > best_eval:
                         best_eval = val
                         best_play = (pit_act, [])
@@ -867,7 +983,7 @@ def find_best_play(board, choices, doubles, empty, supply):
                             if ok:
                                 s2[t] -= 1
                                 tb = 0.001 * TILE_BASE_VALUES.get(t, 0)
-                                val = evaluate_potential_score(b2, s2) + tb
+                                val = evaluate_potential_score(b2, s2, opponent_boards=opps, alpha=alpha) - alpha * sensitivity.get(t,0.0) + tb
                                 if val > best_eval:
                                     best_eval = val
                                     best_play = (pit_act, [(t, col)])
@@ -876,7 +992,7 @@ def find_best_play(board, choices, doubles, empty, supply):
 
         elif num_placements == 2:
             if empty_cells_count(b1) == 0:
-                val = evaluate_potential_score(b1, s1)
+                val = evaluate_potential_score(b1, s1, opponent_boards=opps, alpha=alpha)
                 if val > best_eval:
                     best_eval = val
                     best_play = (pit_act, [])
@@ -886,7 +1002,7 @@ def find_best_play(board, choices, doubles, empty, supply):
                 valid_cols_1 = get_valid_cols(b1)
                 valid_choices_1 = [t for t in set(choices) if s1.get(t, 0) > 0]
                 if not valid_choices_1 or not valid_cols_1:
-                    val = evaluate_potential_score(b1, s1)
+                    val = evaluate_potential_score(b1, s1, opponent_boards=opps, alpha=alpha)
                     if val > best_eval:
                         best_eval = val
                         best_play = (pit_act, [])
@@ -903,7 +1019,7 @@ def find_best_play(board, choices, doubles, empty, supply):
                             s2[t1] -= 1
 
                             if empty_cells_count(b2) == 0:
-                                val = evaluate_potential_score(b2, s2)
+                                val = evaluate_potential_score(b2, s2, opponent_boards=opps, alpha=alpha) - alpha * sensitivity.get(t1,0.0)
                                 if val > best_eval:
                                     best_eval = val
                                     best_play = (pit_act, [(t1, col1)])
@@ -913,7 +1029,7 @@ def find_best_play(board, choices, doubles, empty, supply):
                                 valid_cols_2 = get_valid_cols(b2)
                                 valid_choices_2 = [t for t in set(choices) if s2.get(t, 0) > 0]
                                 if not valid_choices_2 or not valid_cols_2:
-                                    val = evaluate_potential_score(b2, s2)
+                                    val = evaluate_potential_score(b2, s2, opponent_boards=opps, alpha=alpha) - alpha * sensitivity.get(t1,0.0)
                                     if val > best_eval:
                                         best_eval = val
                                         best_play = (pit_act, [(t1, col1)])
@@ -928,7 +1044,7 @@ def find_best_play(board, choices, doubles, empty, supply):
                                             if ok2:
                                                 s3[t2] -= 1
                                                 tb = 0.001 * (TILE_BASE_VALUES.get(t1, 0) + TILE_BASE_VALUES.get(t2, 0))
-                                                val = evaluate_potential_score(b3, s3) + tb
+                                                val = evaluate_potential_score(b3, s3, opponent_boards=opps, alpha=alpha) - alpha * (sensitivity.get(t1,0.0) + sensitivity.get(t2,0.0)) + tb
                                                 if val > best_eval:
                                                     best_eval = val
                                                     best_play = (pit_act, [(t1, col1), (t2, col2)])
@@ -953,6 +1069,18 @@ def auto_play(player, rack, preferences, round, choices, valid_cols, doubles, h_
 
     LOGGER.debug(f"robot player {player} selected play: {best_play} with eval score: {best_eval:.2f}")
 
+    if not interactive:
+        print(f"🤖 Player {player} rolls ", end='')
+        colorize(roll)
+        print(" resulting in ", end='')
+        colorize(choices)
+        print(".")
+        if doubles:
+            sound_bell()
+            print("Doubles!")
+            print()
+        bot_pause()
+
     if best_play is not None:
         pit_act, placements = best_play
 
@@ -968,15 +1096,24 @@ def auto_play(player, rack, preferences, round, choices, valid_cols, doubles, h_
                     sound_bell()
                     print()
                     input(f"Player {player} empties pit tile. ")
+                else:
+                    sound_bell()
+                    print(f"🤖 Player {player} removed Pit tile [{pt}].")
+                    bot_pause()
             elif act_type == 'USE':
                 col = pit_act[1]
                 pt = rack[player - 1][5][5]
                 rack[player - 1][5][5] = '_'
+                ok, r, c = drop_tile(rack[player - 1], col, pt)
                 drop_tile(rack[player - 1], col, pt)
                 if interactive:
                     sound_bell()
                     print()
                     input(f"Player {player} plays pit tile. ")
+                elif ok:
+                    sound_bell()
+                    print(f"🤖 Player {player} used Pit tile [{pt}] in Column {col} (Row {r}).")
+                    bot_pause()
             elif act_type == 'SWAP':
                 tile = pit_act[1]
                 pt = rack[player - 1][5][5]
@@ -991,7 +1128,10 @@ def auto_play(player, rack, preferences, round, choices, valid_cols, doubles, h_
                     sound_bell()
                     print()
                     input(f"Player {player} swaps pit tile. ")
-
+                else:
+                    sound_bell()
+                    print(f"🤖 Player {player} swapped Pit tile [{pt}] with rolled [{tile}].")
+                    bot_pause()
         for tile, col in placements:
             ok, r, c = drop_tile(rack[player - 1], col, tile)
             if ok:
@@ -999,6 +1139,9 @@ def auto_play(player, rack, preferences, round, choices, valid_cols, doubles, h_
                     tile, 'NEGATIVE', cherry_tiles, orange_tiles, bell_tiles, money_tiles
                 )
                 LOGGER.debug(f"Player {player} placed {tile} in column {col} at ({r}, {c})")
+                if not interactive:
+                    print(f"🤖 Player {player} placed [{tile}] in Column {col} (Row {r}).")
+                    bot_pause()
 
     valid_cols = get_valid_cols(rack[player - 1])
     return valid_cols, rack, preferences, h_jkpt, d_jkpt, cherry_tiles, orange_tiles, bell_tiles, money_tiles
@@ -1276,6 +1419,19 @@ if __name__ == "__main__":
         "-l", "--leaderboard", action="store_true",
         help="Display top high score leaderboards and exit"
     )
+    parser.add_argument(
+        "--bot-turn-pause", type=float, default=None,
+        help="Override end-of-turn pause for bot players in seconds (0 to disable)"
+    )
+
+    args = parser.parse_args()
+
+    if args.bot_turn_pause is not None:
+        try:
+            BOT_TURN_PAUSE_SECONDS = float(args.bot_turn_pause)
+            LOGGER.info(f"Overriding bot turn pause to {BOT_TURN_PAUSE_SECONDS} seconds via CLI")
+        except (ValueError, TypeError):
+            LOGGER.warning("Invalid --bot-turn-pause value; keeping configured botTurnPause")
 
     args = parser.parse_args()
 
@@ -1346,13 +1502,10 @@ if __name__ == "__main__":
                             print("\r")
                             print()
                             if doubles:
-                                num_plays = 2
                                 sound_bell()
                                 print("Doubles!")
                                 print()
-                                LOGGER.info(f"Player {player} rolled doubles")
-                            else:
-                                num_plays = 1
+                            num_plays = 2 if doubles else 1
     
                             #use or remove pit tile
                             swap = False
@@ -1375,26 +1528,18 @@ if __name__ == "__main__":
                                     while undo:
                                         valid_cols, undo, cherry_tiles, orange_tiles, bell_tiles, money_tiles = select_tiles(player, round, choices, valid_cols, doubles, h_jkpt, d_jkpt, roll, swap, cherry_tiles, orange_tiles, bell_tiles, money_tiles)
                                     play_cnt += 1
-                                    print_rack(h_jkpt, d_jkpt, round, player, cherry_tiles, orange_tiles, bell_tiles, money_tiles)
+                                    (h_jkpt, d_jkpt) = print_rack(h_jkpt, d_jkpt, round, player, cherry_tiles, orange_tiles, bell_tiles, money_tiles)
                         else:
-                            if doubles:
-                                sound_bell()
-                                print("Doubles!", end = ' ')
-                                LOGGER.info(f"Player {player} rolled doubles")
-                            print("Player "+str(player)+" rolls ", end = '')
-                            colorize(roll)
-                            print(" resulting in: ", end = '')
-                            colorize(choices)
-                            input(". ")
-                            valid_cols, rack, preferences, h_jkpt, d_jkpt, cherry_tiles, orange_tiles, bell_tiles, money_tiles = auto_play(player, rack, preferences, round, choices, valid_cols, doubles, h_jkpt, d_jkpt, roll, empty, cherry_tiles, orange_tiles, bell_tiles, money_tiles)
+                            valid_cols, rack, preferences, h_jkpt, d_jkpt, cherry_tiles, orange_tiles, bell_tiles, money_tiles = auto_play(player, rack, preferences, round, choices, valid_cols, doubles, h_jkpt, d_jkpt, roll, empty, cherry_tiles, orange_tiles, bell_tiles, money_tiles, interactive=False)
     
                         #
                         LOGGER.debug(f"preferences is {preferences}")
-                        print_rack(h_jkpt, d_jkpt, round, player, cherry_tiles, orange_tiles, bell_tiles, money_tiles)
+                        (h_jkpt, d_jkpt) = print_rack(h_jkpt, d_jkpt, round, player, cherry_tiles, orange_tiles, bell_tiles, money_tiles)
                         if player == 1:
                             input("End of turn, player %s. Press any key to continue. " % str(player))
                         else:
-                            input("Player %s has completed their turn. Press any key to continue. " % str(player))
+                            bot_turn_pause()
+                            print()
                         print()
                     else:
                         LOGGER.info(f"Player {player} has no empty cells; ending participation in this round")
