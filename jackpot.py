@@ -13,6 +13,7 @@ import getpass
 from enum import IntEnum
 import os as _os
 import time
+from functools import lru_cache
 
 from shared_logger import get_logger, _load_config
 from high_scores import ensure_high_scores_file, record_high_score, print_leaderboard
@@ -49,8 +50,8 @@ def save_config(cfg):
     try:
         with open(CONFIG_FILE, 'w') as f:
             json.dump(cfg, f, indent=2)
-    except Exception:
-        pass
+    except (OSError, IOError) as e:
+        LOGGER.error(f"Failed to save config: {e}")
 
 
 CONFIG = load_config()
@@ -83,11 +84,12 @@ def bot_pause():
             time.sleep(BOT_PACING_SECONDS)
         # if 0.0 -> instant
 
+
 def bot_turn_pause():
     """Independent pause at end of a bot's turn, controlled by botTurnPause (seconds). 0 or negative -> no pause; 'step' is ignored here."""
     try:
         secs = float(BOT_TURN_PAUSE_SECONDS)
-    except Exception:
+    except (ValueError, TypeError):
         secs = 0.0
     if secs and secs > 0:
         time.sleep(secs)
@@ -108,17 +110,19 @@ active_level = _ActiveLevel(logging.getLevelName(LOGGER.getEffectiveLevel()))
 def initialize_game(num_players):
     game = {}
     player_bonus = {}
-    player = random.randint(1,num_players)
+    player = random.randint(1, num_players)
     for i in range(num_players):
-        game.update({i:[0, 0, 0]})
-        player_bonus.update({i:[0, 0, 0]})
+        game.update({i: [0, 0, 0]})
+        player_bonus.update({i: [0, 0, 0]})
     return game, player_bonus, player
+
 
 def initialize_rack(num_players):
     rack = []
     for i in range(num_players):
-        rack.append([['1 2 3 4 5 6'],['_'], ['_','_'], ['_','_','_'], ['_','_','_','_'],['_','_','_','_','_','_']])
+        rack.append([['1 2 3 4 5 6'], ['_'], ['_', '_'], ['_', '_', '_'], ['_', '_', '_', '_'], ['_', '_', '_', '_', '_', '_']])
     return rack
+
 
 def initialize_round(num_players):
     cherry_tiles = 35
@@ -129,21 +133,37 @@ def initialize_round(num_players):
     d_jkpt = {}
     cont_round = {}
     preferences = {}
-    for i in range(0,num_players):
-        h_jkpt.update({i:False})
-        d_jkpt.update({i:False})
-        cont_round.update({i:True})
-        preferences.update({i:['_','_','_']})
+    for i in range(0, num_players):
+        h_jkpt.update({i: False})
+        d_jkpt.update({i: False})
+        cont_round.update({i: True})
+        preferences.update({i: ['_', '_', '_']})
     return h_jkpt, d_jkpt, cont_round, preferences, cherry_tiles, orange_tiles, bell_tiles, money_tiles
 
-def empty_cells(player):
-    return empty_cells_count(rack[player-1])
 
-    return score, jackpot_H, jackpot_D
+def empty_cells(player):
+    return empty_cells_count(rack[player - 1])
 
 
 def rack_score(player):
-    return score_board(rack[player-1])
+    return score_board(rack[player - 1])
+
+
+def print_colored_supply(supply_dict):
+    """Print supply counts with colored tiles for visualization."""
+    for tile, count in [('C', supply_dict.get('C', 0)), ('O', supply_dict.get('O', 0)),
+                        ('B', supply_dict.get('B', 0)), ('M', supply_dict.get('M', 0))]:
+        for _ in range(count):
+            colorize(tile)
+            print(" ", end='')
+        print("\r")
+
+
+def print_colored_scores(scores_list):
+    """Print scores list aligned for player display."""
+    for i in range(len(scores_list)):
+        print(" " * (8 - len(str(scores_list[i]))), str(scores_list[i]), end=' ')
+
 
 def print_rack(h, d, round, player, cherry_tiles, orange_tiles, bell_tiles, money_tiles):
     clear_screen()
@@ -155,63 +175,43 @@ def print_rack(h, d, round, player, cherry_tiles, orange_tiles, bell_tiles, mone
     if not bonus_dict:
         bonus_dict = {i: [0, 0, 0] for i in range(n_plrs)}
     total = [0] * n_plrs
-    print("Round", end = ' ')
+    print("Round", end=' ')
     for i in range(n_plrs):
-        print(" Player %s" % str(i+1), end = ' ')
+        print(" Player %s" % str(i + 1), end=' ')
     print("\r")
     for rnd in range(3):
-        print(" "*3, str(rnd+1), end = ' ')
+        print(" " * 3, str(rnd + 1), end=' ')
         for plr in range(n_plrs):
-            print(" "*(8 - len(str(game_dict[plr][rnd]))), str(game_dict[plr][rnd]), end = ' ')
+            print(" " * (8 - len(str(game_dict[plr][rnd]))), str(game_dict[plr][rnd]), end=' ')
             total[plr] += game_dict[plr][rnd]
         print("\r")
-        print(" "*5, end = ' ')
+        print(" " * 5, end=' ')
         for plr in range(n_plrs):
-            print(" "*(8 - len(str(bonus_dict[plr][rnd]))), str(bonus_dict[plr][rnd]), end = ' ')
+            print(" " * (8 - len(str(bonus_dict[plr][rnd]))), str(bonus_dict[plr][rnd]), end=' ')
             total[plr] += bonus_dict[plr][rnd]
         print("\r")
-    print("Total", end = ' ')
+    print("Total", end=' ')
     for plr in range(n_plrs):
-        print(" "*(8 - len(str(total[plr]))), str(total[plr]), end = ' ')
+        print(" " * (8 - len(str(total[plr]))), str(total[plr]), end=' ')
     print("\r")
     print()
-    for i in range(cherry_tiles):
-        colorize("C")
-        print(" ", end = '')
-    print("\r")
-    for i in range(orange_tiles):
-        colorize("O")
-        print(" ", end = '')
-    print("\r")
-    for i in range(bell_tiles):
-        colorize("B")
-        print(" ", end = '')
-    print("\r")
-    for i in range(money_tiles):
-        colorize("M")
-        print(" ", end = '')
-    print("\r")
+
+    # Print supply with colors
+    print_colored_supply({'C': cherry_tiles, 'O': orange_tiles, 'B': bell_tiles, 'M': money_tiles})
+
     print()
-    print("Round %s > Player %s"  % (str(round), str(player)))
+    print("Round %s > Player %s" % (str(round), str(player)))
     print()
     row = 0
-    while row < len(rack[player-1]):
+    while row < len(rack[player - 1]):
         col = 0
-        while col < len(rack[player-1][row]):
-            if rack[player-1][row][col] == "C":
-                colorize(rack[player-1][row][col])
-                print(" ", end = '')
-            elif rack[player-1][row][col] == "O":
-                colorize(rack[player-1][row][col])
-                print(" ", end = '')
-            elif rack[player-1][row][col] == "B":
-                colorize(rack[player-1][row][col])
-                print(" ", end = '')
-            elif rack[player-1][row][col] == "M":
-                colorize(rack[player-1][row][col])
-                print(" ", end = '')
+        while col < len(rack[player - 1][row]):
+            val = rack[player - 1][row][col]
+            if val in ("C", "O", "B", "M"):
+                colorize(val)
+                print(" ", end='')
             else:
-                print(rack[player-1][row][col], end = ' ')
+                print(val, end=' ')
             col += 1
         print("\r")
         row += 1
@@ -224,111 +224,101 @@ def print_rack(h, d, round, player, cherry_tiles, orange_tiles, bell_tiles, mone
         game[player - 1][round - 1] = score
     print("Score: " + str(score))
     print()
-    if jackpot_H and not h[player-1]:
+    if jackpot_H and not h[player - 1]:
         sound_bell()
         if player == 1:
             print("Jackpot!!!")
             print()
             LOGGER.info(f"Player {player} hit horizontal jackpot")
-            input("Press any key to continue.")
+            try:
+                input("Press any key to continue.")
+            except Exception as e:
+                LOGGER.error(f"Error waiting for input: {e}")
             print()
         else:
             print("Jackpot!!!")
             print()
             bot_pause()
             LOGGER.info(f"Player {player} hit horizontal jackpot")
-        h[player-1] = True
-    elif jackpot_D and not d[player-1]:
+        h[player - 1] = True
+    elif jackpot_D and not d[player - 1]:
         sound_bell()
         if player == 1:
             print("Jackpot!!!")
             print()
             LOGGER.info(f"Player {player} hit diagonal jackpot")
-            input("Press any key to continue.")
+            try:
+                input("Press any key to continue.")
+            except Exception as e:
+                LOGGER.error(f"Error waiting for input: {e}")
             print()
         else:
             print("Jackpot!!!")
             print()
             bot_pause()
             LOGGER.info(f"Player {player} hit diagonal jackpot")
-        d[player-1] = True
+        d[player - 1] = True
 
     return h, d
+
 
 def score_rack(round, rack, game, player_bonus, forfeit):
     clear_screen()
     n_plrs = len(game) if game else len(rack)
     total = [0] * n_plrs
-    print("Round", end = ' ')
+    print("Round", end=' ')
     for i in range(n_plrs):
-        print(" Player %s" % str(i+1), end = ' ')
+        print(" Player %s" % str(i + 1), end=' ')
     print("\r")
     for rnd in range(3):
-        print(" "*3, str(rnd+1), end = ' ')
+        print(" " * 3, str(rnd + 1), end=' ')
         for plr in range(n_plrs):
-            print(" "*(8 - len(str(game[plr][rnd]))), str(game[plr][rnd]), end = ' ')
+            print(" " * (8 - len(str(game[plr][rnd]))), str(game[plr][rnd]), end=' ')
             total[plr] += game[plr][rnd]
         print("\r")
-        print(" "*5, end = ' ')
+        print(" " * 5, end=' ')
         for plr in range(n_plrs):
-            print(" "*(8 - len(str(player_bonus[plr][rnd]))), str(player_bonus[plr][rnd]), end = ' ')
+            print(" " * (8 - len(str(player_bonus[plr][rnd]))), str(player_bonus[plr][rnd]), end=' ')
             total[plr] += player_bonus[plr][rnd]
         print("\r")
-    print("Total", end = ' ')
+    print("Total", end=' ')
     for plr in range(n_plrs):
-        print(" "*(8 - len(str(total[plr]))), str(total[plr]), end = ' ')
+        print(" " * (8 - len(str(total[plr]))), str(total[plr]), end=' ')
     print("\r")
     print()
-    for i in range(cherry_tiles):
-        colorize("C")
-        print(" ", end = '')
-    print("\r")
-    for i in range(orange_tiles):
-        colorize("O")
-        print(" ", end = '')
-    print("\r")
-    for i in range(bell_tiles):
-        colorize("B")
-        print(" ", end = '')
-    print("\r")
-    for i in range(money_tiles):
-        colorize("M")
-        print(" ", end = '')
-    print("\r")
+
+    print_colored_supply({'C': cherry_tiles, 'O': orange_tiles, 'B': bell_tiles, 'M': money_tiles})
+
     print()
-    print("Round %s > All Players"  % str(round))
+    print("Round %s > All Players" % str(round))
     print()
     for row in range(6):
         for plr in range(len(game)):
             col = 0
             while col < len(rack[plr][row]):
-                if rack[plr][row][col] == "C":
-                    colorize(rack[plr][row][col])
-                    print(" ", end = '')
-                elif rack[plr][row][col] == "O":
-                    colorize(rack[plr][row][col])
-                    print(" ", end = '')
-                elif rack[plr][row][col] == "B":
-                    colorize(rack[plr][row][col])
-                    print(" ", end = '')
-                elif rack[plr][row][col] == "M":
-                    colorize(rack[plr][row][col])
-                    print(" ", end = '')
+                val = rack[plr][row][col]
+                if val in ("C", "O", "B", "M"):
+                    colorize(val)
+                    print(" ", end='')
                 else:
-                    print(rack[plr][row][col], end = '')
-                    print(" ", end = '')
+                    print(val, end='')
+                    print(" ", end='')
                 col += 1
-            print(" "*3, end = ' ')
+            print(" " * 3, end=' ')
             if 1 <= row <= 4:
-                print(" "*(11-(2*row)), end = ' ')
+                print(" " * (11 - (2 * row)), end=' ')
         print("\r")
     print()
     for plr in range(len(game)):
-        print("Player %s" % str(plr+1), end = ' ')
-        print(" "*6, end = ' ')
+        print("Player %s" % str(plr + 1), end=' ')
+        print(" " * 6, end=' ')
     print("\r")
     if round < 3 and not forfeit:
-        forfeit_input = input("Press <Enter> to begin round %s or Q to quit: " % str(round+1))
+        try:
+            forfeit_input = input("Press <Enter> to begin round %s or Q to quit: " % str(round + 1))
+        except Exception as e:
+            LOGGER.error(f"Error reading input: {e}")
+            forfeit_input = ''
         if forfeit_input.strip().upper() == 'Q':
             LOGGER.info("User chose to quit during round score screen")
             forfeit = True
@@ -336,11 +326,13 @@ def score_rack(round, rack, game, player_bonus, forfeit):
             forfeit = False
     return forfeit
 
+
 def col_choices(player, rack_data=None):
     r = rack_data if rack_data is not None else globals().get('rack')
     if r is not None and player - 1 < len(r):
         return get_valid_cols(r[player - 1])
     return []
+
 
 def roll_dice():
     dice = []
@@ -351,8 +343,8 @@ def roll_dice():
     orange_cnt = 0
     bell_cnt = 0
     money_cnt = 0
-    white_dice = [random.randint(1,6), random.randint(1,6)]
-    yellow_dice = [random.randint(1,6), random.randint(1,6)]
+    white_dice = [random.randint(1, 6), random.randint(1, 6)]
+    yellow_dice = [random.randint(1, 6), random.randint(1, 6)]
     for die in white_dice:
         if die == 1 or die == 4:
             dice.append("O")
@@ -419,33 +411,57 @@ def roll_dice():
         tile_choices = ["C", "O", "B", "M"]
     return dice, tile_choices, double_tiles, empty_pit
 
-def pit_tile(player, round, choices, valid_cols, h_jkpt, d_jkpt, roll, swap, cherry_tiles, orange_tiles, bell_tiles, money_tiles, doubles=None):
-    if doubles is None:
-        doubles = globals().get('doubles', False)
-    print("Your tile selection: ", end = '')
+
+def update_supply(tile, delta, supply):
+    """
+    Update supply dictionary in-place for given tile, adding delta.
+    delta positive adds tiles, negative removes tiles.
+    """
+    if tile not in ('C', 'O', 'B', 'M'):
+        return
+    if tile not in supply:
+        supply[tile] = 0
+    supply[tile] += delta
+
+
+def handle_pit_action(player, round, choices, valid_cols, h_jkpt, d_jkpt, roll, swap, cherry_tiles, orange_tiles, bell_tiles, money_tiles, doubles=False):
+    """
+    Handle all pit tile actions (use, remove, swap, keep) for a player.
+    Returns updated valid_cols, h_jkpt, d_jkpt, swap flag, and supply counts.
+    """
+    print("Your tile selection: ", end='')
     colorize(choices)
     print("\r")
     print()
     LOGGER.info(f"Player {player} pit options: current={rack[player-1][5][5]}, choices={choices}")
     input_err = True
     while input_err:
-        use_pit = input("Use (U), Remove (R), or Swap (S) pit tile ['%s'] or Not (N)? " % rack[player-1][5][5])
+        try:
+            use_pit = input("Use (U), Remove (R), or Swap (S) pit tile ['%s'] or Not (N)? " % rack[player-1][5][5])
+        except Exception as e:
+            LOGGER.error(f"Error reading pit action input: {e}")
+            continue
         print()
-        if use_pit.upper() == "U":
+        use_pit_upper = use_pit.upper()
+        if use_pit_upper == "U":
             LOGGER.info(f"Player {player} uses pit tile {rack[player-1][5][5]}")
             input_err = False
-            cherry_tiles, orange_tiles, bell_tiles, money_tiles = transact(rack[player-1][5][5], 'POSITIVE', cherry_tiles, orange_tiles, bell_tiles, money_tiles)
+            cherry_tiles, orange_tiles, bell_tiles, money_tiles = transact(
+                rack[player-1][5][5], 'POSITIVE', cherry_tiles, orange_tiles, bell_tiles, money_tiles)
             undo_tile = rack[player-1][5][5]
             rack[player-1][5][5] = '_'
-            undo, cherry_tiles, orange_tiles, bell_tiles, money_tiles = place_tile(player, round, h_jkpt, d_jkpt, undo_tile, valid_cols, empty_cells(player), True, True, cherry_tiles, orange_tiles, bell_tiles, money_tiles)
+            undo, cherry_tiles, orange_tiles, bell_tiles, money_tiles = place_tile(
+                player, round, h_jkpt, d_jkpt, undo_tile, valid_cols, empty_cells(player),
+                True, True, cherry_tiles, orange_tiles, bell_tiles, money_tiles)
             if undo:
                 input_err = True
                 rack[player-1][5][5] = undo_tile
             else:
                 valid_cols = col_choices(player)
-                (h_jkpt, d_jkpt) = print_rack(h_jkpt, d_jkpt, round, player, cherry_tiles, orange_tiles, bell_tiles, money_tiles)
+                (h_jkpt, d_jkpt) = print_rack(h_jkpt, d_jkpt, round, player,
+                                              cherry_tiles, orange_tiles, bell_tiles, money_tiles)
                 if empty_cells(player) > 0:
-                    print("Your roll: ", end = '')
+                    print("Your roll: ", end='')
                     colorize(roll)
                     print("\r")
                     print()
@@ -453,14 +469,16 @@ def pit_tile(player, round, choices, valid_cols, h_jkpt, d_jkpt, roll, swap, che
                         sound_bell()
                         print("Doubles!")
                         print()
-        elif use_pit.upper() == "R":
+        elif use_pit_upper == "R":
             LOGGER.info(f"Player {player} removes pit tile {rack[player-1][5][5]}")
             input_err = False
-            cherry_tiles, orange_tiles, bell_tiles, money_tiles = transact(rack[player-1][5][5], 'POSITIVE', cherry_tiles, orange_tiles, bell_tiles, money_tiles)
+            cherry_tiles, orange_tiles, bell_tiles, money_tiles = transact(
+                rack[player-1][5][5], 'POSITIVE', cherry_tiles, orange_tiles, bell_tiles, money_tiles)
             rack[player-1][5][5] = '_'
             valid_cols = col_choices(player)
-            (h_jkpt, d_jkpt) = print_rack(h_jkpt, d_jkpt, round, player, cherry_tiles, orange_tiles, bell_tiles, money_tiles)
-            print("Your roll: ", end = '')
+            (h_jkpt, d_jkpt) = print_rack(h_jkpt, d_jkpt, round, player,
+                                          cherry_tiles, orange_tiles, bell_tiles, money_tiles)
+            print("Your roll: ", end='')
             colorize(roll)
             print("\r")
             print()
@@ -468,21 +486,24 @@ def pit_tile(player, round, choices, valid_cols, h_jkpt, d_jkpt, roll, swap, che
                 sound_bell()
                 print("Doubles!")
                 print()
-        elif use_pit.upper() == "S":
+        elif use_pit_upper == "S":
             # Swap means: return current pit tile to supply, then place ONE of the rolled tiles into the pit.
-            # It must NOT pull an arbitrary tile from supply beyond the selected rolled tile.
             # Filter rolled choices by supply availability so we don't go negative.
             available_swap_choices = [c for c in choices if check_supply(c, cherry_tiles, orange_tiles, bell_tiles, money_tiles)]
             if not available_swap_choices:
                 sound_bell()
                 LOGGER.warning("Cannot swap pit tile: none of the rolled tiles are available in supply")
                 print("None of the rolled tiles are available in the supply to swap into the pit.")
-                input("Press <Enter> to continue. ")
+                try:
+                    input("Press <Enter> to continue. ")
+                except Exception as e:
+                    LOGGER.error(f"Error waiting for input: {e}")
                 print()
             else:
                 # Step 1: Return existing pit tile to supply
                 old_pit = rack[player-1][5][5]
-                cherry_tiles, orange_tiles, bell_tiles, money_tiles = transact(old_pit, 'POSITIVE', cherry_tiles, orange_tiles, bell_tiles, money_tiles)
+                cherry_tiles, orange_tiles, bell_tiles, money_tiles = transact(
+                    old_pit, 'POSITIVE', cherry_tiles, orange_tiles, bell_tiles, money_tiles)
 
                 # Step 2: Choose which rolled tile to place into pit (must be from available_swap_choices)
                 if len(available_swap_choices) == 1:
@@ -493,7 +514,11 @@ def pit_tile(player, round, choices, valid_cols, h_jkpt, d_jkpt, roll, swap, che
                     while sel_input_err:
                         print("Select a tile from ", end='')
                         colorize(available_swap_choices)
-                        selection = input(": ").strip().upper()
+                        try:
+                            selection = input(": ").strip().upper()
+                        except Exception as e:
+                            LOGGER.error(f"Error reading swap selection input: {e}")
+                            continue
                         print()
                         if selection in available_swap_choices:
                             new_tile = selection
@@ -504,14 +529,16 @@ def pit_tile(player, round, choices, valid_cols, h_jkpt, d_jkpt, roll, swap, che
 
                 # Step 3: Place the selected rolled tile into the pit and deduct from supply
                 rack[player-1][5][5] = new_tile
-                cherry_tiles, orange_tiles, bell_tiles, money_tiles = transact(new_tile, 'NEGATIVE', cherry_tiles, orange_tiles, bell_tiles, money_tiles)
+                cherry_tiles, orange_tiles, bell_tiles, money_tiles = transact(
+                    new_tile, 'NEGATIVE', cherry_tiles, orange_tiles, bell_tiles, money_tiles)
                 LOGGER.info(f"Player {player} swaps pit tile {old_pit} with {new_tile}")
                 swap = True
 
                 input_err = False
                 valid_cols = col_choices(player)
-                (h_jkpt, d_jkpt) = print_rack(h_jkpt, d_jkpt, round, player, cherry_tiles, orange_tiles, bell_tiles, money_tiles)
-                print("Your roll: ", end = '')
+                (h_jkpt, d_jkpt) = print_rack(h_jkpt, d_jkpt, round, player,
+                                              cherry_tiles, orange_tiles, bell_tiles, money_tiles)
+                print("Your roll: ", end='')
                 colorize(roll)
                 print("\r")
                 print()
@@ -519,7 +546,7 @@ def pit_tile(player, round, choices, valid_cols, h_jkpt, d_jkpt, roll, swap, che
                     sound_bell()
                     print("Doubles!")
                     print()
-        elif use_pit.upper() == "N":
+        elif use_pit_upper == "N":
             LOGGER.info(f"Player {player} keeps pit tile as is")
             input_err = False
         else:
@@ -527,9 +554,22 @@ def pit_tile(player, round, choices, valid_cols, h_jkpt, d_jkpt, roll, swap, che
             LOGGER.warning(f"Invalid input for pit tile action: {use_pit}")
     return valid_cols, h_jkpt, d_jkpt, swap, cherry_tiles, orange_tiles, bell_tiles, money_tiles
 
-def select_tiles(player, round, choices, valid_cols, doubles, h_jkpt, d_jkpt, roll, swap, cherry_tiles, orange_tiles, bell_tiles, money_tiles):
+
+def select_tiles(player, round, choices, valid_cols, doubles, h_jkpt, d_jkpt, roll, swap,
+                 cherry_tiles, orange_tiles, bell_tiles, money_tiles, context=None):
+    """
+    Select tiles from choices for placement.
+    Uses tile supply from context if provided, else from passed parameters or globals.
+    Returns updated valid_cols, undo flag, and updated supply counts.
+    """
     undo = False
-    supply_args = (cherry_tiles, orange_tiles, bell_tiles, money_tiles)
+    # Prepare supply tuple or dict from context or parameters
+    if context is not None:
+        supply_args = (context.get('cherry_tiles', 0), context.get('orange_tiles', 0),
+                       context.get('bell_tiles', 0), context.get('money_tiles', 0))
+    else:
+        supply_args = (cherry_tiles, orange_tiles, bell_tiles, money_tiles)
+
     available_choices = [c for c in choices if check_supply(c, *supply_args)]
 
     if not available_choices:
@@ -537,7 +577,10 @@ def select_tiles(player, round, choices, valid_cols, doubles, h_jkpt, d_jkpt, ro
         sound_bell()
         LOGGER.warning(f"No rolled tiles available in supply: {choices}")
         print("All rolled tile options are currently in play and unavailable in supply.")
-        input("Press <Enter> to continue. ")
+        try:
+            input("Press <Enter> to continue. ")
+        except Exception as e:
+            LOGGER.error(f"Error waiting for input: {e}")
         print()
         valid_cols = col_choices(player)
         return valid_cols, undo, cherry_tiles, orange_tiles, bell_tiles, money_tiles
@@ -547,19 +590,25 @@ def select_tiles(player, round, choices, valid_cols, doubles, h_jkpt, d_jkpt, ro
         colorize(available_choices[0])
         print("'].\n")
         undo, cherry_tiles, orange_tiles, bell_tiles, money_tiles = place_tile(
-            player, round, h_jkpt, d_jkpt, available_choices[0], valid_cols, empty_cells(player), False, False, *supply_args
+            player, round, h_jkpt, d_jkpt, available_choices[0], valid_cols, empty_cells(player),
+            False, False, cherry_tiles, orange_tiles, bell_tiles, money_tiles,
         )
     elif len(available_choices) > 1 and not swap:
         sel_input_err = True
         while sel_input_err:
             print("Select a tile from ", end='')
             colorize(available_choices)
-            selection = input(": ").strip().upper()
+            try:
+                selection = input(": ").strip().upper()
+            except Exception as e:
+                LOGGER.error(f"Error reading tile selection input: {e}")
+                continue
             print()
             if selection in available_choices:
                 sel_input_err = False
                 undo, cherry_tiles, orange_tiles, bell_tiles, money_tiles = place_tile(
-                    player, round, h_jkpt, d_jkpt, selection, valid_cols, empty_cells(player), True, False, *supply_args
+                    player, round, h_jkpt, d_jkpt, selection, valid_cols, empty_cells(player), True, False,
+                    cherry_tiles, orange_tiles, bell_tiles, money_tiles,
                 )
             else:
                 sound_bell()
@@ -569,7 +618,8 @@ def select_tiles(player, round, choices, valid_cols, doubles, h_jkpt, d_jkpt, ro
         colorize(available_choices[0])
         print("'].\n")
         undo, cherry_tiles, orange_tiles, bell_tiles, money_tiles = place_tile(
-            player, round, h_jkpt, d_jkpt, available_choices[0], valid_cols, empty_cells(player), False, False, *supply_args
+            player, round, h_jkpt, d_jkpt, available_choices[0], valid_cols, empty_cells(player),
+            False, False, cherry_tiles, orange_tiles, bell_tiles, money_tiles,
         )
     else:
         undo = False
@@ -577,123 +627,141 @@ def select_tiles(player, round, choices, valid_cols, doubles, h_jkpt, d_jkpt, ro
     valid_cols = col_choices(player)
     return valid_cols, undo, cherry_tiles, orange_tiles, bell_tiles, money_tiles
 
-def place_tile(player, round, h_jkpt, d_jkpt, tile, valid_cols, empty_cells, undoable, place_pit, cherry_tiles, orange_tiles, bell_tiles, money_tiles):
+
+def place_tile(player, round, h_jkpt, d_jkpt, tile, valid_cols, empty_cells,
+               undoable, place_pit, cherry_tiles, orange_tiles, bell_tiles, money_tiles, context=None):
+    """
+    Place a tile on the board.
+    Uses supply counts from context if provided, else from parameters.
+    Returns undo flag and updated supply counts.
+    """
     undo = False
     pla_input_err = True
     show_tile_sel = False
+
     while pla_input_err:
-        if len(valid_cols) == 1:
-            if show_tile_sel:
-                print("Your tile choice: ['", end = '')
-                colorize(tile)
-                print("']")
+        try:
+            if len(valid_cols) == 1:
+                if show_tile_sel:
+                    print("Your tile choice: ['", end='')
+                    colorize(tile)
+                    print("']")
+                    print()
+                if undoable:
+                    do_undo = input("Your column selection is %s. Press <Enter> to continue or Z to undo. " % str(valid_cols[0]))
+                else:
+                    input("Your column selection is %s. Press any key to continue. " % str(valid_cols[0]))
                 print()
-            if undoable:
-                do_undo = input("Your column selection is %s. Press <Enter> to continue or Z to undo. " % str(valid_cols[0]))
+                if undoable and do_undo.upper() == "Z":
+                    pla_input_err = False
+                    undo = True
+                    LOGGER.info("Placement undone by user")
+                else:
+                    if rack[player-1][5][valid_cols[0] - 1] == '_':
+                        rack[player-1][5][valid_cols[0] - 1] = tile
+                        LOGGER.info(f"Player {player} placed {tile} in column {valid_cols[0]}")
+                        pla_input_err = False
+                    elif rack[player-1][4][valid_cols[0] - 1] == '_':
+                        rack[player-1][4][valid_cols[0] - 1] = tile
+                        LOGGER.info(f"Player {player} placed {tile} in column {valid_cols[0]}")
+                        pla_input_err = False
+                    elif rack[player-1][3][valid_cols[0] - 1] == '_':
+                        rack[player-1][3][valid_cols[0] - 1] = tile
+                        LOGGER.info(f"Player {player} placed {tile} in column {valid_cols[0]}")
+                        pla_input_err = False
+                    elif rack[player-1][2][valid_cols[0] - 1] == '_':
+                        rack[player-1][2][valid_cols[0] - 1] = tile
+                        LOGGER.info(f"Player {player} placed {tile} in column {valid_cols[0]}")
+                        pla_input_err = False
+                    elif rack[player-1][1][valid_cols[0] - 1] == '_':
+                        rack[player-1][1][valid_cols[0] - 1] = tile
+                        LOGGER.info(f"Player {player} placed {tile} in column {valid_cols[0]}")
+                        pla_input_err = False
+                    cherry_tiles, orange_tiles, bell_tiles, money_tiles = transact(tile, 'NEGATIVE',
+                                                                                   cherry_tiles, orange_tiles, bell_tiles,
+                                                                                   money_tiles)
             else:
-                input("Your column selection is %s. Press any key to continue. " % str(valid_cols[0]))
-            print()
-            if undoable and do_undo.upper() == "Z":
-                pla_input_err = False
-                undo = True
-                LOGGER.info("Placement undone by user")
-            else:
-                if rack[player-1][5][valid_cols[0] - 1] == '_':
-                    rack[player-1][5][valid_cols[0] - 1] = tile
-                    LOGGER.info(f"Player {player} placed {tile} in column {valid_cols[0]}")
-                    pla_input_err = False
-                elif rack[player-1][4][valid_cols[0] - 1] == '_':
-                    rack[player-1][4][valid_cols[0] - 1] = tile
-                    LOGGER.info(f"Player {player} placed {tile} in column {valid_cols[0]}")
-                    pla_input_err = False
-                elif rack[player-1][3][valid_cols[0] - 1] == '_':
-                    rack[player-1][3][valid_cols[0] - 1] = tile
-                    LOGGER.info(f"Player {player} placed {tile} in column {valid_cols[0]}")
-                    pla_input_err = False
-                elif rack[player-1][2][valid_cols[0] - 1] == '_':
-                    rack[player-1][2][valid_cols[0] - 1] = tile
-                    LOGGER.info(f"Player {player} placed {tile} in column {valid_cols[0]}")
-                    pla_input_err = False
-                elif rack[player-1][1][valid_cols[0] - 1] == '_':
-                    rack[player-1][1][valid_cols[0] - 1] = tile
-                    LOGGER.info(f"Player {player} placed {tile} in column {valid_cols[0]}")
-                    pla_input_err = False
-                cherry_tiles, orange_tiles, bell_tiles, money_tiles = transact(tile, 'NEGATIVE', cherry_tiles, orange_tiles, bell_tiles, money_tiles)
-        else:
-            if show_tile_sel:
-                print("Your tile choice: ['", end = '')
-                colorize(tile)
-                print("']")
+                if show_tile_sel:
+                    print("Your tile choice: ['", end='')
+                    colorize(tile)
+                    print("']")
+                    print()
+                if undoable:
+                    placement = input("Select a column from %s or enter Z to undo: " % valid_cols)
+                else:
+                    placement = input("Select a column from %s: " % valid_cols)
                 print()
-            if undoable:
-                placement = input("Select a column from %s or enter Z to undo: " % valid_cols)
-            else:
-                placement = input("Select a column from %s: " % valid_cols)
-            print()
-            if undoable and placement.upper() == "Z":
-                pla_input_err = False
-                undo = True
-                LOGGER.info("Placement undone by user")
-            elif placement == "":
-                show_tile_sel = True
-                sound_bell()
-                LOGGER.warning("Empty column selection input")
-                print_rack(h_jkpt, d_jkpt, round, player, cherry_tiles, orange_tiles, bell_tiles, money_tiles)
-            else:
-                col_strings = []
-                for i in valid_cols:
-                    col_strings.append(str(i))
-                if placement not in col_strings:
+                if undoable and placement.upper() == "Z":
+                    pla_input_err = False
+                    undo = True
+                    LOGGER.info("Placement undone by user")
+                elif placement == "":
                     show_tile_sel = True
                     sound_bell()
-                    LOGGER.warning(f"Invalid column selection: {placement}")
-                else:
-                    placement = int(placement) - 1
-                    if rack[player-1][5][placement] == '_':
-                        rack[player-1][5][placement] = tile
-                        LOGGER.info(f"Player {player} placed {tile} in column {int(placement)+1}")
-                        pla_input_err = False
-                        undo_place = 5
-                    elif rack[player-1][4][placement] == '_':
-                        rack[player-1][4][placement] = tile
-                        LOGGER.info(f"Player {player} placed {tile} in column {int(placement)+1}")
-                        pla_input_err = False
-                        undo_place = 4
-                    elif rack[player-1][3][placement] == '_':
-                        rack[player-1][3][placement] = tile
-                        LOGGER.info(f"Player {player} placed {tile} in column {int(placement)+1}")
-                        pla_input_err = False
-                        undo_place = 3
-                    elif rack[player-1][2][placement] == '_':
-                        rack[player-1][2][placement] = tile
-                        LOGGER.info(f"Player {player} placed {tile} in column {int(placement)+1}")
-                        pla_input_err = False
-                        undo_place = 2
-                    elif rack[player-1][1][placement] == '_':
-                        rack[player-1][1][placement] = tile
-                        LOGGER.info(f"Player {player} placed {tile} in column {int(placement)+1}")
-                        pla_input_err = False
-                        undo_place = 1
-                    if place_pit:
-                        rack[player-1][5][5] = '_'
-                print_rack(h_jkpt, d_jkpt, round, player, cherry_tiles, orange_tiles, bell_tiles, money_tiles)
-            if undo or pla_input_err:
-                pass
-            else:
-                cherry_tiles, orange_tiles, bell_tiles, money_tiles = transact(tile, 'NEGATIVE', cherry_tiles, orange_tiles, bell_tiles, money_tiles)
-                sure = input("Player %s, you have selected column %s. Press <Enter> to continue or Z to undo. " % (str(player), str(int(placement)+1)))
-                if sure.upper() == "Z":
-                    pla_input_err = True
-                    show_tile_sel = True
-                    rack[player-1][undo_place][placement] = '_'
-                    if place_pit:
-                        rack[player-1][5][5] = tile
-                    else:
-                        cherry_tiles, orange_tiles, bell_tiles, money_tiles = transact(tile, 'POSITIVE', cherry_tiles, orange_tiles, bell_tiles, money_tiles)
+                    LOGGER.warning("Empty column selection input")
                     print_rack(h_jkpt, d_jkpt, round, player, cherry_tiles, orange_tiles, bell_tiles, money_tiles)
-                    LOGGER.info("Placement undone by user confirmation")
+                else:
+                    col_strings = [str(i) for i in valid_cols]
+                    if placement not in col_strings:
+                        show_tile_sel = True
+                        sound_bell()
+                        LOGGER.warning(f"Invalid column selection: {placement}")
+                    else:
+                        placement_int = int(placement) - 1
+                        if rack[player-1][5][placement_int] == '_':
+                            rack[player-1][5][placement_int] = tile
+                            LOGGER.info(f"Player {player} placed {tile} in column {int(placement_int)+1}")
+                            pla_input_err = False
+                            undo_place = 5
+                        elif rack[player-1][4][placement_int] == '_':
+                            rack[player-1][4][placement_int] = tile
+                            LOGGER.info(f"Player {player} placed {tile} in column {int(placement_int)+1}")
+                            pla_input_err = False
+                            undo_place = 4
+                        elif rack[player-1][3][placement_int] == '_':
+                            rack[player-1][3][placement_int] = tile
+                            LOGGER.info(f"Player {player} placed {tile} in column {int(placement_int)+1}")
+                            pla_input_err = False
+                            undo_place = 3
+                        elif rack[player-1][2][placement_int] == '_':
+                            rack[player-1][2][placement_int] = tile
+                            LOGGER.info(f"Player {player} placed {tile} in column {int(placement_int)+1}")
+                            pla_input_err = False
+                            undo_place = 2
+                        elif rack[player-1][1][placement_int] == '_':
+                            rack[player-1][1][placement_int] = tile
+                            LOGGER.info(f"Player {player} placed {tile} in column {int(placement_int)+1}")
+                            pla_input_err = False
+                            undo_place = 1
+                        if place_pit:
+                            rack[player-1][5][5] = '_'
+                    print_rack(h_jkpt, d_jkpt, round, player, cherry_tiles, orange_tiles, bell_tiles, money_tiles)
+                if undo or pla_input_err:
+                    pass
+                else:
+                    cherry_tiles, orange_tiles, bell_tiles, money_tiles = transact(tile, 'NEGATIVE',
+                                                                                   cherry_tiles, orange_tiles, bell_tiles,
+                                                                                   money_tiles)
+                    sure = input("Player %s, you have selected column %s. Press <Enter> to continue or Z to undo. " %
+                                 (str(player), str(int(placement_int) + 1)))
+                    if sure.upper() == "Z":
+                        pla_input_err = True
+                        show_tile_sel = True
+                        rack[player-1][undo_place][placement_int] = '_'
+                        if place_pit:
+                            rack[player-1][5][5] = tile
+                        else:
+                            cherry_tiles, orange_tiles, bell_tiles, money_tiles = transact(tile, 'POSITIVE',
+                                                                                           cherry_tiles, orange_tiles,
+                                                                                           bell_tiles, money_tiles)
+                        print_rack(h_jkpt, d_jkpt, round, player, cherry_tiles, orange_tiles, bell_tiles, money_tiles)
+                        LOGGER.info("Placement undone by user confirmation")
+        except Exception as e:
+            LOGGER.error(f"Unexpected error in place_tile input loop: {e}")
+            continue
 
     return undo, cherry_tiles, orange_tiles, bell_tiles, money_tiles
+
 
 def check_supply(tile, cherry_tiles=None, orange_tiles=None, bell_tiles=None, money_tiles=None):
     c = cherry_tiles if cherry_tiles is not None else globals().get('cherry_tiles', 0)
@@ -709,6 +777,7 @@ def check_supply(tile, cherry_tiles=None, orange_tiles=None, bell_tiles=None, mo
     elif tile == "M":
         return m > 0
     return False
+
 
 def transact(tile, sign, cherry_tiles, orange_tiles, bell_tiles, money_tiles):
     if sign.upper() == 'POSITIVE':
@@ -727,6 +796,7 @@ def transact(tile, sign, cherry_tiles, orange_tiles, bell_tiles, money_tiles):
 
     return cherry_tiles, orange_tiles, bell_tiles, money_tiles
 
+
 ROLL_PROBS = {
     # based on exact enumeration over 1296 outcomes
     # Probability a single roll yields at least one selectable tile of type t.
@@ -741,32 +811,50 @@ DEFAULT_ROLL_AT_LEAST_ONE = {
     'M': 0.3333333333,
 }
 
+
 def lookup_roll_probability(tile, k):
     # Probability of getting at least k of tile 'tile' in a future sequence of rolls is complex; as a first step, use per-roll at-least-one and binomial over trials.
     # This improves base p from naive 0.25 to exact per-roll choice probability.
     base = DEFAULT_ROLL_AT_LEAST_ONE.get(tile, 0.25)
     return base if k <= 1 else max(0.0, base ** k)
 
+
 def completion_probability(tile, needed, trials, supply_available):
     if needed <= 0:
         return 1.0
     if needed > trials or needed > supply_available:
         return 0.0
-    p = lookup_roll_probability(tile,1)
+    p = lookup_roll_probability(tile, 1)
     prob = 0.0
     for i in range(needed, trials + 1):
         prob += math.comb(trials, i) * (p ** i) * ((1.0 - p) ** (trials - i))
     return prob
 
 
-def evaluate_potential_score(board, supply, opponent_boards=None, alpha=BOT_DEFENSE_ALPHA):
+def _board_to_tuple(board):
+    """Convert 2D board list of lists to a tuple of tuples for hashing."""
+    return tuple(tuple(row) for row in board)
+
+
+def _supply_to_tuple(supply):
+    """Convert supply dict to a sorted tuple of (tile, count) for hashing."""
+    return tuple(sorted(supply.items()))
+
+
+@lru_cache(maxsize=256)
+def _evaluate_potential_score_cached(board_tuple, supply_tuple, alpha):
+    """
+    Memoized internal evaluation function for board potential score.
+    Uses tuple representations of board and supply for caching efficiency.
+    """
+    # Convert tuples back to dict/list structures for internal use
+    board = [list(row) for row in board_tuple]
+    supply = dict(supply_tuple)
+
     actual_score, _, _ = score_board(board)
     empty_cells = empty_cells_count(board)
 
-    # Effective remaining trials roughly equal to empty cells
     trials = min(empty_cells, 14)
-
-    # 1. Line potential
     line_evs = []
 
     for line_name, cells in LINES:
@@ -786,7 +874,7 @@ def evaluate_potential_score(board, supply, opponent_boards=None, alpha=BOT_DEFE
                 non_blanks = [t for t in window if t != '_']
                 distinct_tiles = set(non_blanks)
 
-                if len(distinct_tiles) == 1:
+                if len(distinct_tiles) == 1 and non_blanks:
                     target_tile = non_blanks[0]
                     placed = len(non_blanks)
                     needed = k - placed
@@ -802,12 +890,10 @@ def evaluate_potential_score(board, supply, opponent_boards=None, alpha=BOT_DEFE
         if best_line_ev > 0:
             line_evs.append(best_line_ev)
 
-    # Realistic budget: top lines contribute most, capped realistic budget
     line_evs.sort(reverse=True)
     discount_weights = [1.0, 0.60, 0.30]
     line_potential = sum(ev * w for ev, w in zip(line_evs, discount_weights))
 
-    # 2. Rack bonus potential
     rack_bonus_ev = 0.0
     counts = count_board_tiles(board)
 
@@ -831,32 +917,24 @@ def evaluate_potential_score(board, supply, opponent_boards=None, alpha=BOT_DEFE
             prob = completion_probability(t, needed, trials, avail)
             rack_bonus_ev += base * prob
 
-    # 3. Pit tile value
     pit_tile = board[5][5]
     if pit_tile != '_':
         pit_val = TILE_BASE_VALUES.get(pit_tile, 20) * 0.20
     else:
-        # Option value of an empty pit ready to absorb unwanted tiles
         pit_val = 25.0
 
-    opponent_penalty = 0.0
-    if opponent_boards and alpha > 0:
-        # Estimate opponent EV before vs after removing one unit of each tile we might use; measure sensitivity
-        opp_evs_before = []
-        for ob in opponent_boards:
-            opp_evs_before.append(_estimate_board_ev(ob, supply))
-        # Sensitivity by tile: how much EV drops if one less tile is available
-        sensitivity = {t: 0.0 for t in ['C','O','B','M']}
-        for t in sensitivity.keys():
-            if supply.get(t,0) > 0:
-                s_less = supply.copy(); s_less[t] -= 1
-                delta = 0.0
-                for ob in opponent_boards:
-                    delta += max(0.0, _estimate_board_ev(ob, s_less) - _estimate_board_ev(ob, supply))
-                sensitivity[t] = delta
-        # Aggregate penalty later when scoring placements (passed through find_best_play)
+    # Opponent penalty is omitted here due to caching limitation
+    return actual_score + line_potential + rack_bonus_ev + pit_val
 
-    return actual_score + line_potential + rack_bonus_ev + pit_val - opponent_penalty
+
+def evaluate_potential_score(board, supply, opponent_boards=None, alpha=BOT_DEFENSE_ALPHA):
+    """
+    External interface to evaluate potential score with memoization.
+    Converts mutable inputs to immutable tuples for caching.
+    """
+    board_tuple = _board_to_tuple(board)
+    supply_tuple = _supply_to_tuple(supply)
+    return _evaluate_potential_score_cached(board_tuple, supply_tuple, alpha)
 
 
 def _estimate_board_ev(board, supply):
@@ -879,15 +957,13 @@ def get_possible_pit_actions(board, choices, supply, empty):
 
     actions = [('KEEP',), ('REMOVE',)]
 
-    # USE: any valid column per current board state
     try:
         valid_cols = get_valid_cols(board)
-    except Exception:
+    except (ValueError, TypeError):
         valid_cols = []
     for col in valid_cols:
         actions.append(('USE', col))
 
-    # SWAP: any rolled tile with supply > 0
     for t in set(choices):
         if supply.get(t, 0) > 0:
             actions.append(('SWAP', t))
@@ -901,13 +977,13 @@ def find_best_play(board, choices, doubles, empty, supply, all_boards=None, alph
     best_final_board = None
     best_final_supply = None
 
-    opps = [rb for idx, rb in enumerate(globals().get('rack', [])) if rb is not board] if all_boards is None else [rb for rb in all_boards if rb is not board]
+    opps = [rb for idx, rb in enumerate(globals().get('rack', [])) if rb is not board] if all_boards is None else [
+        rb for rb in all_boards if rb is not board]
 
-    # Precompute sensitivity once for defensive evaluation
-    sensitivity = {t: 0.0 for t in ['C','O','B','M']}
+    sensitivity = {t: 0.0 for t in ['C', 'O', 'B', 'M']}
     if alpha > 0:
         for t in sensitivity.keys():
-            if supply.get(t,0) > 0:
+            if supply.get(t, 0) > 0:
                 s_less = supply.copy()
                 s_less[t] -= 1
                 delta = 0.0
@@ -983,7 +1059,7 @@ def find_best_play(board, choices, doubles, empty, supply, all_boards=None, alph
                             if ok:
                                 s2[t] -= 1
                                 tb = 0.001 * TILE_BASE_VALUES.get(t, 0)
-                                val = evaluate_potential_score(b2, s2, opponent_boards=opps, alpha=alpha) - alpha * sensitivity.get(t,0.0) + tb
+                                val = evaluate_potential_score(b2, s2, opponent_boards=opps, alpha=alpha) - alpha * sensitivity.get(t, 0.0) + tb
                                 if val > best_eval:
                                     best_eval = val
                                     best_play = (pit_act, [(t, col)])
@@ -1019,7 +1095,7 @@ def find_best_play(board, choices, doubles, empty, supply, all_boards=None, alph
                             s2[t1] -= 1
 
                             if empty_cells_count(b2) == 0:
-                                val = evaluate_potential_score(b2, s2, opponent_boards=opps, alpha=alpha) - alpha * sensitivity.get(t1,0.0)
+                                val = evaluate_potential_score(b2, s2, opponent_boards=opps, alpha=alpha) - alpha * sensitivity.get(t1, 0.0)
                                 if val > best_eval:
                                     best_eval = val
                                     best_play = (pit_act, [(t1, col1)])
@@ -1029,7 +1105,7 @@ def find_best_play(board, choices, doubles, empty, supply, all_boards=None, alph
                                 valid_cols_2 = get_valid_cols(b2)
                                 valid_choices_2 = [t for t in set(choices) if s2.get(t, 0) > 0]
                                 if not valid_choices_2 or not valid_cols_2:
-                                    val = evaluate_potential_score(b2, s2, opponent_boards=opps, alpha=alpha) - alpha * sensitivity.get(t1,0.0)
+                                    val = evaluate_potential_score(b2, s2, opponent_boards=opps, alpha=alpha) - alpha * sensitivity.get(t1, 0.0)
                                     if val > best_eval:
                                         best_eval = val
                                         best_play = (pit_act, [(t1, col1)])
@@ -1044,7 +1120,8 @@ def find_best_play(board, choices, doubles, empty, supply, all_boards=None, alph
                                             if ok2:
                                                 s3[t2] -= 1
                                                 tb = 0.001 * (TILE_BASE_VALUES.get(t1, 0) + TILE_BASE_VALUES.get(t2, 0))
-                                                val = evaluate_potential_score(b3, s3, opponent_boards=opps, alpha=alpha) - alpha * (sensitivity.get(t1,0.0) + sensitivity.get(t2,0.0)) + tb
+                                                val = evaluate_potential_score(b3, s3, opponent_boards=opps, alpha=alpha) - alpha * (
+                                                        sensitivity.get(t1, 0.0) + sensitivity.get(t2, 0.0)) + tb
                                                 if val > best_eval:
                                                     best_eval = val
                                                     best_play = (pit_act, [(t1, col1), (t2, col2)])
@@ -1095,7 +1172,10 @@ def auto_play(player, rack, preferences, round, choices, valid_cols, doubles, h_
                 if interactive:
                     sound_bell()
                     print()
-                    input(f"Player {player} empties pit tile. ")
+                    try:
+                        input(f"Player {player} empties pit tile. ")
+                    except Exception as e:
+                        LOGGER.error(f"Error waiting for input: {e}")
                 else:
                     sound_bell()
                     print(f"🤖 Player {player} removed Pit tile [{pt}].")
@@ -1109,7 +1189,10 @@ def auto_play(player, rack, preferences, round, choices, valid_cols, doubles, h_
                 if interactive:
                     sound_bell()
                     print()
-                    input(f"Player {player} plays pit tile. ")
+                    try:
+                        input(f"Player {player} plays pit tile. ")
+                    except Exception as e:
+                        LOGGER.error(f"Error waiting for input: {e}")
                 elif ok:
                     sound_bell()
                     print(f"🤖 Player {player} used Pit tile [{pt}] in Column {col} (Row {r}).")
@@ -1127,7 +1210,10 @@ def auto_play(player, rack, preferences, round, choices, valid_cols, doubles, h_
                 if interactive:
                     sound_bell()
                     print()
-                    input(f"Player {player} swaps pit tile. ")
+                    try:
+                        input(f"Player {player} swaps pit tile. ")
+                    except Exception as e:
+                        LOGGER.error(f"Error waiting for input: {e}")
                 else:
                     sound_bell()
                     print(f"🤖 Player {player} swapped Pit tile [{pt}] with rolled [{tile}].")
@@ -1145,6 +1231,7 @@ def auto_play(player, rack, preferences, round, choices, valid_cols, doubles, h_
 
     valid_cols = get_valid_cols(rack[player - 1])
     return valid_cols, rack, preferences, h_jkpt, d_jkpt, cherry_tiles, orange_tiles, bell_tiles, money_tiles
+
 
 def high_scores(scope, player, score, num_players, round):
     if player == 1:
@@ -1221,7 +1308,6 @@ def simulate_game(num_players=4, starting_player=None):
             current_player = 1 if current_player == num_players else current_player + 1
             continue_round = any(cont_round.values())
 
-        # Round bonus
         round_scores = [game[p][rnd - 1] for p in range(num_players)]
         high_score = max(round_scores)
         bonus_val = BONUS_SCORE[rnd - 1]
@@ -1358,9 +1444,9 @@ def print_simulation_report(stats):
     print(f"Overall Average Game Score : {avg_game:.1f}")
     print(f"Overall Average Round Score: {avg_round:.1f} (Max Round: {max_round})")
     print(f"Average Turns per Game     : {avg_turns:.1f}")
-    print(f"Tied Games                 : {stats['ties']} ({(stats['ties']/N*100):.1f}%)")
-    print(f"Horizontal Jackpots Hit    : {stats['total_h_jackpots']} ({stats['total_h_jackpots']/N:.2f}/game)")
-    print(f"Diagonal Jackpots Hit      : {stats['total_d_jackpots']} ({stats['total_d_jackpots']/N:.2f}/game)")
+    print(f"Tied Games                 : {stats['ties']} ({(stats['ties'] / N * 100):.1f}%)")
+    print(f"Horizontal Jackpots Hit    : {stats['total_h_jackpots']} ({stats['total_h_jackpots'] / N:.2f}/game)")
+    print(f"Diagonal Jackpots Hit      : {stats['total_d_jackpots']} ({stats['total_d_jackpots'] / N:.2f}/game)")
 
     print("\n[TILE SUPPLY DEPLETION FREQUENCY]")
     for tile_name, key in [('Cherry', 'C'), ('Orange', 'O'), ('Bell', 'B'), ('Money', 'M')]:
@@ -1368,38 +1454,41 @@ def print_simulation_report(stats):
         print(f"  {tile_name:<8} depleted in {dep_cnt} turns across {N} games")
     print("=" * 68)
 
+
 def colorize(tiles):
     if isinstance(tiles, str):
         if tiles == "C":
-            print(u"\u001b[31m" + str(tiles) + u"\u001b[0m", end = '')
+            print(u"\u001b[31m" + str(tiles) + u"\u001b[0m", end='')
         elif tiles == "O":
-            print(u"\u001b[38;5;208m" + str(tiles) + u"\u001b[0m", end = '')
+            print(u"\u001b[38;5;208m" + str(tiles) + u"\u001b[0m", end='')
         elif tiles == "B":
-            print(u"\u001b[34m" + str(tiles) + u"\u001b[0m", end = '')
+            print(u"\u001b[34m" + str(tiles) + u"\u001b[0m", end='')
         elif tiles == "M":
-            print(u"\u001b[32m" + str(tiles) + u"\u001b[0m", end = '')
+            print(u"\u001b[32m" + str(tiles) + u"\u001b[0m", end='')
     else:
         tile_cnt = 0
-        print("[", end = '')
+        print("[", end='')
         for tile in tiles:
             tile_cnt += 1
-            print("'", end = '')
+            print("'", end='')
             if tile == "C":
-                print(u"\u001b[31m" + tile + u"\u001b[0m", end = '')
+                print(u"\u001b[31m" + tile + u"\u001b[0m", end='')
             elif tile == "O":
-                print(u"\u001b[38;5;208m" + tile + u"\u001b[0m", end = '')
+                print(u"\u001b[38;5;208m" + tile + u"\u001b[0m", end='')
             elif tile == "B":
-                print(u"\u001b[34m" + tile + u"\u001b[0m", end = '')
+                print(u"\u001b[34m" + tile + u"\u001b[0m", end='')
             elif tile == "M":
-                print(u"\u001b[32m" + tile + u"\u001b[0m", end = '')
-            print("'", end = '')
+                print(u"\u001b[32m" + tile + u"\u001b[0m", end='')
+            print("'", end='')
             if tile_cnt < len(tiles):
-                print(", ", end = '')
-        print("]", end = '')
+                print(", ", end='')
+        print("]", end='')
+
 
 def sound_bell():
     sys.stdout.write('\a')
     sys.stdout.flush()
+
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Jackpot - Milton Bradley dice & rack board game")
@@ -1433,7 +1522,8 @@ if __name__ == "__main__":
         except (ValueError, TypeError):
             LOGGER.warning("Invalid --bot-turn-pause value; keeping configured botTurnPause")
 
-    args = parser.parse_args()
+    # Only parse once to avoid double parse
+    # args = parser.parse_args()  # Removed duplicate call
 
     if args.leaderboard:
         clear_screen()
@@ -1448,56 +1538,61 @@ if __name__ == "__main__":
         print_simulation_report(stats)
         sys.exit(0)
 
-    #MAIN PROGRAM
+    # MAIN PROGRAM
     play_again = True
-    
-    #game loop
+
+    # game loop
     while play_again:
         clear_screen()
         LOGGER.info(f"Starting game with log level {active_level.name}")
         players_input_err = True
         while players_input_err:
-            num_players = input("Enter number of players (2 - 4): ")
-            print()
-            if str(num_players) not in ["2", "3", "4"]:
+            try:
+                num_players = input("Enter number of players (2 - 4): ")
+                print()
+                if str(num_players) not in ["2", "3", "4"]:
+                    sound_bell()
+                    LOGGER.warning(f"Invalid players input: {num_players}")
+                else:
+                    num_players = int(num_players)
+                    players_input_err = False
+                    LOGGER.info(f"Players selected: {num_players}")
+            except Exception as e:
+                LOGGER.error(f"Error reading number of players input: {e}")
                 sound_bell()
-                LOGGER.warning(f"Invalid players input: {num_players}")
-            else:
-                num_players = int(num_players)
-                players_input_err = False
-                LOGGER.info(f"Players selected: {num_players}")
         game, player_bonus, player = initialize_game(num_players)
-        input("Player %s goes first! Press any key to continue. " % str(player))
+        try:
+            input("Player %s goes first! Press any key to continue. " % str(player))
+        except Exception as e:
+            LOGGER.error(f"Error waiting for initial continue input: {e}")
         LOGGER.info(f"Player {player} will go first")
         forfeit = False
-    
-        #round loop
-        for round in range(1,4):
+
+        # round loop
+        for round in range(1, 4):
             if not forfeit:
                 rack = initialize_rack(num_players)
                 (h_jkpt, d_jkpt, cont_round, preferences, cherry_tiles, orange_tiles, bell_tiles, money_tiles) = initialize_round(num_players)
                 LOGGER.info(f"Round {round} start. Supply C={cherry_tiles}, O={orange_tiles}, B={bell_tiles}, M={money_tiles}. Starting player: {player}")
-                #
                 LOGGER.debug(f"preferences is {preferences}")
-                continue_round = False
-                for item in cont_round:
-                    if cont_round[item]:
-                        continue_round = True
-                    
-                #player loop
+                continue_round = any(cont_round.values())
+
+                # player loop
                 while continue_round and not forfeit:
                     if empty_cells(player) > 0:
                         (h_jkpt, d_jkpt) = print_rack(h_jkpt, d_jkpt, round, player, cherry_tiles, orange_tiles, bell_tiles, money_tiles)
                         if player == 1:
-                            input("Player %s, press any key to roll dice: " % str(player))
+                            try:
+                                input("Player %s, press any key to roll dice: " % str(player))
+                            except Exception as e:
+                                LOGGER.error(f"Error waiting for roll dice input: {e}")
                             print()
-    
-                        #roll dice
+
                         (roll, choices, doubles, empty) = roll_dice()
                         LOGGER.info(f"Player {player} rolled {roll}; choices={choices}; doubles={doubles}; pitEmpty={empty}")
                         valid_cols = col_choices(player)
                         if player == 1:
-                            print("Your roll: ", end = '')
+                            print("Your roll: ", end='')
                             colorize(roll)
                             print("\r")
                             print()
@@ -1506,19 +1601,19 @@ if __name__ == "__main__":
                                 print("Doubles!")
                                 print()
                             num_plays = 2 if doubles else 1
-    
-                            #use or remove pit tile
+
                             swap = False
                             if rack[player-1][5][5] != '_' and empty:
                                 sound_bell()
                                 print("You have the option to play or remove the pit tile!")
                                 print()
-                                (valid_cols, h_jkpt, d_jkpt, swap, cherry_tiles, orange_tiles, bell_tiles, money_tiles) = pit_tile(player, round, choices, valid_cols, h_jkpt, d_jkpt, roll, swap, cherry_tiles, orange_tiles, bell_tiles, money_tiles, doubles=doubles)
+                                valid_cols, h_jkpt, d_jkpt, swap, cherry_tiles, orange_tiles, bell_tiles, money_tiles = handle_pit_action(
+                                    player, round, choices, valid_cols, h_jkpt, d_jkpt, roll, swap,
+                                    cherry_tiles, orange_tiles, bell_tiles, money_tiles, doubles=doubles)
                                 if swap:
                                     num_plays -= 1
                                     swap = False
-    
-                            #select tiles
+
                             play_cnt = 1
                             while play_cnt <= num_plays:
                                 if empty_cells(player) == 0:
@@ -1526,41 +1621,46 @@ if __name__ == "__main__":
                                 elif empty_cells(player) > 0:
                                     undo = True
                                     while undo:
-                                        valid_cols, undo, cherry_tiles, orange_tiles, bell_tiles, money_tiles = select_tiles(player, round, choices, valid_cols, doubles, h_jkpt, d_jkpt, roll, swap, cherry_tiles, orange_tiles, bell_tiles, money_tiles)
+                                        valid_cols, undo, cherry_tiles, orange_tiles, bell_tiles, money_tiles = select_tiles(
+                                            player, round, choices, valid_cols, doubles, h_jkpt, d_jkpt,
+                                            roll, swap, cherry_tiles, orange_tiles, bell_tiles, money_tiles)
                                     play_cnt += 1
-                                    (h_jkpt, d_jkpt) = print_rack(h_jkpt, d_jkpt, round, player, cherry_tiles, orange_tiles, bell_tiles, money_tiles)
+                                    (h_jkpt, d_jkpt) = print_rack(h_jkpt, d_jkpt, round, player,
+                                                                  cherry_tiles, orange_tiles, bell_tiles,
+                                                                  money_tiles)
                         else:
-                            valid_cols, rack, preferences, h_jkpt, d_jkpt, cherry_tiles, orange_tiles, bell_tiles, money_tiles = auto_play(player, rack, preferences, round, choices, valid_cols, doubles, h_jkpt, d_jkpt, roll, empty, cherry_tiles, orange_tiles, bell_tiles, money_tiles, interactive=False)
-    
-                        #
+                            valid_cols, rack, preferences, h_jkpt, d_jkpt, cherry_tiles, orange_tiles, bell_tiles, money_tiles = auto_play(
+                                player, rack, preferences, round, choices, valid_cols, doubles,
+                                h_jkpt, d_jkpt, roll, empty, cherry_tiles, orange_tiles, bell_tiles, money_tiles,
+                                interactive=False)
+
                         LOGGER.debug(f"preferences is {preferences}")
-                        (h_jkpt, d_jkpt) = print_rack(h_jkpt, d_jkpt, round, player, cherry_tiles, orange_tiles, bell_tiles, money_tiles)
+                        (h_jkpt, d_jkpt) = print_rack(h_jkpt, d_jkpt, round, player,
+                                                      cherry_tiles, orange_tiles, bell_tiles, money_tiles)
                         if player == 1:
-                            input("End of turn, player %s. Press any key to continue. " % str(player))
+                            try:
+                                input("End of turn, player %s. Press any key to continue. " % str(player))
+                            except Exception as e:
+                                LOGGER.error(f"Error waiting for end of turn input: {e}")
                         else:
                             bot_turn_pause()
                             print()
                         print()
                     else:
                         LOGGER.info(f"Player {player} has no empty cells; ending participation in this round")
-                        cont_round[player-1] = False
+                        cont_round[player - 1] = False
                     if player == num_players:
                         player = 1
                     else:
                         player += 1
-                    continue_round = False
-                    for item in cont_round:
-                        if cont_round[item]:
-                            continue_round = True
-    
-                #end of round
+                    continue_round = any(cont_round.values())
+
                 sound_bell()
                 print("End of round %s." % str(round))
                 print()
-                #high round bonus
                 round_scores = {}
-                for plr in range(1,len(game)+1):
-                    round_scores.update({plr:game[plr-1][round-1]})
+                for plr in range(1, len(game) + 1):
+                    round_scores.update({plr: game[plr - 1][round - 1]})
                 round_values = round_scores.values()
                 high_score = max(round_values)
                 high_player = []
@@ -1569,56 +1669,62 @@ if __name__ == "__main__":
                         high_player.append(k)
                 bonus_score = [30, 60, 120]
                 for x in high_player:
-                    player_bonus[x-1][round-1] = bonus_score[round-1]
+                    player_bonus[x - 1][round - 1] = bonus_score[round - 1]
                 if len(high_player) == 1:
-                    print("The round %s high round bonus of %s goes to player %s." % (str(round), str(bonus_score[round-1]), str(int(high_player[0]))))
-                    LOGGER.info(f"Round {round} high round bonus {bonus_score[round-1]} awarded to player {int(high_player[0])}")
-                    high_scores("ROUND", int(high_player[0]), max(round_values), num_players, round-1)
+                    print("The round %s high round bonus of %s goes to player %s." % (str(round), str(bonus_score[round - 1]), str(int(high_player[0]))))
+                    LOGGER.info(f"Round {round} high round bonus {bonus_score[round - 1]} awarded to player {int(high_player[0])}")
+                    high_scores("ROUND", int(high_player[0]), max(round_values), num_players, round - 1)
                 else:
-                    print("The round %s high round bonus of %s goes to players %s." % (str(round), str(bonus_score[round-1]), str(high_player)))
-                    LOGGER.info(f"Round {round} high round bonus {bonus_score[round-1]} awarded to players {high_player}")
+                    print("The round %s high round bonus of %s goes to players %s." % (str(round), str(bonus_score[round - 1]), str(high_player)))
+                    LOGGER.info(f"Round {round} high round bonus {bonus_score[round - 1]} awarded to players {high_player}")
                 print()
-                input("Press any key to update the score and continue. ")
+                try:
+                    input("Press any key to update the score and continue. ")
+                except Exception as e:
+                    LOGGER.error(f"Error waiting for continue input: {e}")
                 print_rack(h_jkpt, d_jkpt, round, player, cherry_tiles, orange_tiles, bell_tiles, money_tiles)
                 forfeit = score_rack(round, rack, game, player_bonus, forfeit)
-    
-        #end of game
+
         sound_bell()
         score_rack(round, rack, game, player_bonus, forfeit)
         print()
         print("Game Over.")
         print()
         if not forfeit:
-            #winner
             total = []
             all = []
             for plr in range(len(game)):
                 total.append(0)
                 for rnd in range(3):
                     total[plr] += game[plr][rnd] + player_bonus[plr][rnd]
-                    all.append(total[plr])
+                all.append(total[plr])
             high_score = max(all)
             high_player = []
             for k in range(len(total)):
                 if total[k] == high_score:
                     high_player.append(k)
             if len(high_player) == 1:
-                print("The winner is player " + str(high_player[0]+1) + " with " + str(max(total)) + " points!")
-                LOGGER.info(f"Game winner: player {high_player[0]+1} with {max(total)} points")
-                high_scores("GAME", int(high_player[0])+1, max(total), num_players, round-1)
+                print("The winner is player " + str(high_player[0] + 1) + " with " + str(max(total)) + " points!")
+                LOGGER.info(f"Game winner: player {high_player[0] + 1} with {max(total)} points")
+                high_scores("GAME", int(high_player[0]) + 1, max(total), num_players, round - 1)
             elif len(high_player) == 2:
-                print('The winners are players '+str(high_player[0]+1)+' and '+str(high_player[1]+1)+' with ' + str(max(total)) + ' points!')
-                LOGGER.info(f"Game winners: players {high_player[0]+1} and {high_player[1]+1} with {max(total)} points")
+                print('The winners are players ' + str(high_player[0] + 1) + ' and ' + str(high_player[1] + 1) + ' with ' + str(max(total)) + ' points!')
+                LOGGER.info(f"Game winners: players {high_player[0] + 1} and {high_player[1] + 1} with {max(total)} points")
             elif len(high_player) == 3:
-                print('The winners are players '+str(high_player[0]+1)+', '+str(high_player[1]+1)+', and '+str(high_player[2]+1)+' with ' + str(max(total)) + ' points!')
-                LOGGER.info(f"Game winners: players {high_player[0]+1}, {high_player[1]+1}, and {high_player[2]+1} with {max(total)} points")
+                print('The winners are players ' + str(high_player[0] + 1) + ', ' + str(high_player[1] + 1) + ', and ' + str(high_player[2] + 1) + ' with ' + str(max(total)) + ' points!')
+                LOGGER.info(f"Game winners: players {high_player[0] + 1}, {high_player[1] + 1}, and {high_player[2] + 1} with {max(total)} points")
             elif len(high_player) == 4:
-                print('The winners are players '+str(high_player[0]+1)+', '+str(high_player[1]+1)+', '+str(high_player[2]+1)+', and '+str(high_player[3]+1)+' with ' + str(max(total)) + ' points!')
-                LOGGER.info(f"Game winners: players {high_player[0]+1}, {high_player[1]+1}, {high_player[2]+1}, and {high_player[3]+1} with {max(total)} points")
+                print('The winners are players ' + str(high_player[0] + 1) + ', ' + str(high_player[1] + 1) + ', ' + str(high_player[2] + 1) + ', and ' + str(high_player[3] + 1) + ' with ' + str(max(total)) + ' points!')
+                LOGGER.info(f"Game winners: players {high_player[0] + 1}, {high_player[1] + 1}, {high_player[2] + 1}, and {high_player[3] + 1} with {max(total)} points")
             print()
         again_input_err = True
         while again_input_err:
-            again_yn = input("Would you like to play again? (Y/N) ")
+            try:
+                again_yn = input("Would you like to play again? (Y/N) ")
+            except Exception as e:
+                LOGGER.error(f"Error reading play again input: {e}")
+                sound_bell()
+                continue
             if again_yn.upper() == "Y":
                 again_input_err = False
                 print()
@@ -1631,4 +1737,3 @@ if __name__ == "__main__":
             else:
                 sound_bell()
                 print()
-    
